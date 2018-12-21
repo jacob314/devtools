@@ -222,6 +222,10 @@ class CoreElement {
 
   int get scrollTop => element.scrollTop;
 
+  int get scrollWidth => element.scrollWidth;
+
+  int get scrollLeft => element.scrollLeft;
+
   set scrollTop(int value) => element.scrollTop = value;
 
   int get offsetHeight => element.offsetHeight;

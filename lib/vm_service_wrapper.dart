@@ -141,7 +141,8 @@ class VmServiceWrapper implements VmService {
   }
 
   @override
-  Future getObject(String isolateId, String objectId, {int offset, int count}) {
+  Future<Object> getObject(String isolateId, String objectId,
+      {int offset, int count}) {
     return _trackFuture(_vmService.getObject(isolateId, objectId));
   }
 

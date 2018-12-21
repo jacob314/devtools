@@ -201,6 +201,110 @@ table tr.selected {
    border-radius: 3px;
 }
 
+.viewport-border {
+    border: 1px solid #dfe2e5;
+    border-radius: 3px;
+    overflow: scroll;
+    scroll-behavior: smooth;
+    width: 100%;
+    height: 100%;
+ }
+
+.gutter {
+    background-color: #eee;
+    background-repeat: no-repeat;
+    background-position: 50%;
+}
+
+.gutter.gutter-horizontal {
+    background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkftS9AAAAIklEQVQoU2M4c+bMfxAGAgYYmwGrIIiDjrELjpo5aiZeMwF+yNnOs5KSvgAAAABJRU5ErkJggg==');
+    cursor: col-resize;
+    height: 100%;
+}
+
+.gutter.gutter-vertical {
+    background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAFAQMAAABo7865AAAABlBMVEVHcEzMzMzyAv2sAAAAAXRSTlMAQObYZgAAABBJREFUeF5jOAMEEAIEEFwAn3kMwcB6I2AAAAAASUVORK5CYII=');
+    cursor: row-resize;
+    width: 100%;
+}
+
+.inspector-container {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    overflow: hidden;
+    margin: 1em 0;
+    color: #fff;
+    align-items: center;
+    flex: 1 1 auto;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+/* Minimum aspect ratio */
+@media (min-aspect-ratio: 1/1) {
+    .inspector-container {
+        flex-direction: row;
+    }
+}
+
+.flutter-icon {
+    box-sizing: content-box;
+    margin: 2px 3px 2px 2px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.btn .flutter-icon {
+}
+
+
+.viewport-content {
+    position: relative;
+    width: 0px;
+    height: 0px;
+    overflow: hidden;
+}
+
+.viewport-spacer {
+    position: absolute;
+    overflow: hidden;
+}
+
+.fake-scroll-target {
+    position: absolute;
+    overflow: hidden;
+}
+
+.space-left {
+    top: 0px;
+    bottom: 0px;
+    left: 0px;
+    width: 0px;
+}
+
+.space-right {
+    top: 0px;
+    bottom: 0px;
+    right: 0px;
+    width: 0px;
+}
+
+.space-top {
+    top: 0px;
+    left: 0px;
+    right: 0px;
+    height: 0px;
+}
+
+.space-bottom {
+    bottom: 0px;
+    left: 0px;
+    right: 0px;
+    height: 0px;
+}
+
 .frame-bar {
     background: #4078c0;
     height: 12px;
@@ -487,7 +591,6 @@ div.tabnav {
 }
 
 .frame-panel {
-
 }
 
 .frame-event {
@@ -605,4 +708,44 @@ nav.menu li {
 
 .list-item.selected .subtle {
     color: #ccc;
+}
+
+/* Overwrite the default to keep the scrollbar always visible */
+/*
+We have to do something with the scrollbars as the infite
+scrolling logic makes them flicker.
+*/
+
+::-webkit-scrollbar {
+    -webkit-appearance: none;
+    width: 9px;
+    height: 9px;
+}
+
+::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background-color: rgba(0,0,0,.5);
+    box-shadow: 0 0 1px rgba(255,255,255,.5);
+}
+
+/* Make sure content inside buttons is vertically centered. */
+.btn {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* Increase line height so standard sized icons look ok in buttons. */
+.btn-sm {
+    line-height: 22px;
+}
+
+@media all and (max-width: 1060px) {
+    .btn-group.collapsible .optional-text span {
+        display: none;
+    }
+
+    .btn-group.collapsible .btn .flutter-icon {
+        margin-right: 0;
+        box-sizing: content-box;
+    }
 }
