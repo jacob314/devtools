@@ -67,7 +67,7 @@ class MemoryScreen extends Screen {
               div()..flex(),
             ])
         ]),
-      tableContainer = div(c: 'section overflow-auto')..layoutHorizontal()
+      tableContainer = div(c: 'section overflow-auto')..layoutHorizontal(),
     ]);
 
     _pushNextTable(null, _createHeapStatsTableView());

@@ -1,3 +1,9 @@
+// Copyright 2018 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+library diagnostics_node;
+
 import 'dart:async';
 
 import 'package:devtools/inspector/flutter_widget.dart';
@@ -171,7 +177,7 @@ class DiagnosticsNode {
 
   @override
   bool operator ==(dynamic other) {
-    if (other is! DiagnosticsNode) return null;
+    if (other is! DiagnosticsNode) return false;
     return getDartDiagnosticRef() == other.getDartDiagnosticRef();
   }
 
@@ -522,37 +528,52 @@ class DiagnosticsNode {
 
   /// Check whether children are already available.
   bool get childrenReady {
-    return json.containsKey('children') ||
-        (_children != null && _children.isCompleted);
+    return json.containsKey('children') || _children != null || !hasChildren;
   }
 
   Future<List<DiagnosticsNode>> get children {
-    if (_children == null) {
-      _children = new Completer();
-      if (json.containsKey('children')) {
-        final List<Object> jsonArray = json['children'];
-        final List<DiagnosticsNode> nodes = [];
-        for (Map<String, Object> element in jsonArray) {
-          final child =
-              new DiagnosticsNode(element, inspectorService, false, parent);
-          child.parent = this;
-          nodes.add(child);
-        }
-        _children.complete(nodes);
-      } else if (hasChildren) {
-        bindFutureToCompleter(
-            inspectorService.getChildren(
-                getDartDiagnosticRef(), isSummaryTree, this),
-            _children);
-      } else {
-        // Known to have no children so we can provide the children immediately.
-        _children.complete([]);
-      }
-    }
-    return _children.future;
+    _computeChildren();
+    return _childrenFuture;
   }
 
-  Completer<List<DiagnosticsNode>> _children;
+  List<DiagnosticsNode> get childrenNow {
+    _maybePopulateChildren();
+    return _children;
+  }
+
+  Future<void> _computeChildren() async {
+    _maybePopulateChildren();
+    if (!hasChildren || _children != null) {
+      return;
+    }
+    _childrenFuture = inspectorService.getChildren(getDartDiagnosticRef(), isSummaryTree, this);
+    try {
+      _children = await _childrenFuture;
+    } finally {
+      _children ??= [];
+    }
+  }
+
+  void _maybePopulateChildren() {
+    if (!hasChildren || _children != null) {
+      return;
+    }
+
+    if (json.containsKey('children')) {
+      final List<Object> jsonArray = json['children'];
+      final List<DiagnosticsNode> nodes = [];
+      for (Map<String, Object> element in jsonArray) {
+        final child =
+        new DiagnosticsNode(element, inspectorService, false, parent);
+        child.parent = this;
+        nodes.add(child);
+      }
+      _children = nodes;
+    }
+  }
+
+  Future<List<DiagnosticsNode>> _childrenFuture;
+  List<DiagnosticsNode> _children;
 
   /// Reference the actual Dart DiagnosticsNode object this object is referencing.
   InspectorInstanceRef getDartDiagnosticRef() {

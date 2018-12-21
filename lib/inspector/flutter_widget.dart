@@ -7,41 +7,41 @@ import 'package:devtools/utils.dart';
 import 'package:http/http.dart';
 
 class Category {
-  const Category(this.label, this.icon);
+  Category(this.label, this.icon);
 
-  static const Category ACCESSIBILITY =
-      Category('Accessibility', FlutterIcons.Accessibility);
-  static const Category ANIMATION_AND_MOTION =
-      Category('Animation and Motion', FlutterIcons.Animation);
-  static const Category ASSETS_IMAGES_AND_ICONS =
-      Category('Assets, Images, and Icons', FlutterIcons.Assets);
-  static const Category ASYNC = Category('Async', FlutterIcons.Async);
-  static const Category BASICS =
+  static final Category accessibility =
+      Category('Accessibility', FlutterIcons.accessibility);
+  static final Category animationAndMotion =
+      Category('Animation and Motion', FlutterIcons.animation);
+  static final Category assetsImagesAndIcons =
+      Category('Assets, Images, and Icons', FlutterIcons.assets);
+  static final Category async = Category('Async', FlutterIcons.async);
+  static final Category basics =
       Category('Basics', null); // TODO(jacobr): add an icon.
-  static const Category CUPERTINO = Category(
+  static final Category cupertino = Category(
       'Cupertino (iOS-style widgets)', null); // TODO(jacobr): add an icon.
-  static const Category INPUT = Category('Input', FlutterIcons.Input);
-  static const Category PAINTING_AND_EFFECTS =
-      Category('Painting and effects', FlutterIcons.Painting);
-  static const Category SCROLLING =
-      Category('Scrolling', FlutterIcons.Scrollbar);
-  static const Category STACK = Category('Stack', FlutterIcons.Stack);
-  static const Category STYLING = Category('Styling', FlutterIcons.Styling);
-  static const Category TEXT = Category('Text', FlutterIcons.Text);
+  static final Category input = Category('Input', FlutterIcons.input);
+  static final Category paintingAndEffects =
+      Category('Painting and effects', FlutterIcons.painting);
+  static final Category scrolling =
+      Category('Scrolling', FlutterIcons.scrollbar);
+  static final Category stack = Category('Stack', FlutterIcons.stack);
+  static final Category styling = Category('Styling', FlutterIcons.styling);
+  static final Category text = Category('Text', FlutterIcons.text);
 
-  static const List<Category> values = [
-    ACCESSIBILITY,
-    ANIMATION_AND_MOTION,
-    ASSETS_IMAGES_AND_ICONS,
-    ASYNC,
-    BASICS,
-    CUPERTINO,
-    INPUT,
-    PAINTING_AND_EFFECTS,
-    SCROLLING,
-    STACK,
-    STYLING,
-    TEXT,
+  static final List<Category> values = [
+    accessibility,
+    animationAndMotion,
+    assetsImagesAndIcons,
+    async,
+    basics,
+    cupertino,
+    input,
+    paintingAndEffects,
+    scrolling,
+    stack,
+    styling,
+    text,
   ];
 
   final String label;
