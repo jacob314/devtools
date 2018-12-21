@@ -286,7 +286,6 @@ class ViewportCanvas extends Object with SetStateMixin {
   Rect _renderedViewport;
   Rect _viewport = Rect.zero;
 
-
   void _dispatchMouseMoveEvent() {
     if (_onMouseMove != null) {
       _onMouseMove(_clientToGlobal(_currentMouseHover));
