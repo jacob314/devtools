@@ -5,11 +5,12 @@
 library inspector_tree;
 
 import 'dart:html';
+import 'dart:math' as math;
 
 import 'package:devtools/ui/material_icons.dart';
+import 'package:devtools/ui/viewport_canvas.dart';
 import 'package:meta/meta.dart';
 
-import '../framework/framework.dart';
 import '../inspector/diagnostics_node.dart';
 import '../inspector/inspector.dart';
 import '../inspector/inspector_service.dart';
@@ -33,7 +34,7 @@ class InspectorTreeNode {
   InspectorTreeNode({
     InspectorTreeNode parent,
     this.isProperty = false,
-    bool expandChildren = false,
+    bool expandChildren = true,
   })  : //_diagnostic = diagnostic,
         _children = <InspectorTreeNode>[],
         _parent = parent,
@@ -292,20 +293,32 @@ class TreeRow {
 typedef CanvasPaintCallback = void Function(
     CanvasRenderingContext2D canvas, int index, double width, double height);
 
-class InspectorTree extends Object with SetStateMixin, OnAddedToDomMixin {
+class InspectorTree extends Object {
   InspectorTree({
     @required InspectorTreeNode root,
     @required this.summaryTree,
     @required this.treeType,
-  }) : defaultIcon = _customIconMaker.fromInfo('Default');
+  }) : defaultIcon = _customIconMaker.fromInfo('Default') {
+    _viewportCanvas = new ViewportCanvas(_paintCallback);
+  }
 
   static const double iconPadding = 3.0;
 
-  InspectorTreeNode root;
+  InspectorTreeNode get root => _root;
+  InspectorTreeNode _root;
+  set root(InspectorTreeNode node) {
+    setState(() {
+      _root = node;
+      print("XXX setting root to $node");
+      print("Size ${_root.subtreeSize}");
+    });
+  }
+
   DiagnosticsNode subtreeRoot; // Optional.
   InspectorTreeNode _selection;
   InspectorTreeNode highlightedRoot;
   DiagnosticsNode selectedValue;
+  ViewportCanvas _viewportCanvas;
 
   Set<VoidCallback> selectionChangeCallbacks = new Set();
   final bool summaryTree;
@@ -313,8 +326,9 @@ class InspectorTree extends Object with SetStateMixin, OnAddedToDomMixin {
   final Icon defaultIcon;
 
   @override
-  // TODO: implement element
-  CoreElement get element => CoreElement('div');
+  CoreElement get element => _viewportCanvas.element;
+
+  bool _recomputeRows = false;
 
   double getRowOffset(int index) {
     return (root.getRow(index)?.depth ?? 0) * columnWidth;
@@ -331,6 +345,17 @@ class InspectorTree extends Object with SetStateMixin, OnAddedToDomMixin {
       }
     });
   }
+
+  void setState(Function modifyState) {
+    // More closely match Flutter semantics where state is set immediately
+    // instead of after a frame.
+    modifyState();
+    if (!_recomputeRows) {
+      _recomputeRows = true;
+      window.requestAnimationFrame((_) => _rebuildData());
+    }
+  }
+
 
   InspectorTreeNode get selection => _selection;
 
@@ -450,7 +475,7 @@ class InspectorTree extends Object with SetStateMixin, OnAddedToDomMixin {
     Color currentColor;
 
     bool isVisible(double width) {
-      return currentX <= visible.left + visible.width &&
+      return currentX <= visible.right &&
           visible.left <= currentX + width;
     }
 
@@ -472,12 +497,13 @@ class InspectorTree extends Object with SetStateMixin, OnAddedToDomMixin {
           currentColor = textStyle.color;
           canvas.fillStyle = colorToCss(currentColor);
         }
-        canvas.fillText(text, currentX, 0);
+        canvas.fillText(text, currentX, rowHeight - 4);
       }
       currentX += width;
     }
 
     void addIcon(Icon icon) {
+      print("XXX add icon");
       if (currentX > visible.right) {
         return; // We might also want to wrap.
       }
@@ -485,13 +511,14 @@ class InspectorTree extends Object with SetStateMixin, OnAddedToDomMixin {
       double width = icon.iconWidth + iconPadding;
       if (isVisible(width)) {
         if (image != null) {
+          print("XXX draw Image");
           canvas.drawImage(image, currentX, 0);
+        } else {
+          print("XXX skipping as null $icon");
         }
       }
       currentX += width;
     }
-
-    canvas.save(); // not really needed outside of debug mode.
 
     final TreeRow row = root?.getRow(index,
         selection: selection, highlightedRoot: highlightedRoot);
@@ -653,7 +680,7 @@ class InspectorTree extends Object with SetStateMixin, OnAddedToDomMixin {
       }
     }
 
-    // TODO(devoncarew): For widgets that are definied in the current project, we could consider
+    // TODO(jacobr): For widgets that are definied in the current project, we could consider
     // appending the relative path to the defining library ('lib/src/foo_page.dart').
 
     canvas.restore();
@@ -678,7 +705,34 @@ class InspectorTree extends Object with SetStateMixin, OnAddedToDomMixin {
   }
 
   void expandPath(InspectorTreeNode treeNode) {
+    // TODO(jacobr): implement.
+    throw 'unimplemeneted';
     setState(() {});
+  }
+
+  void _paintCallback(CanvasRenderingContext2D canvas, Rect rect) {
+    final int startRow = rect.top ~/ rowHeight;
+    final int endRow = math.min(rect.bottom ~/ rowHeight + 1, numRows);
+    for (int i = startRow; i < endRow; i++) {
+      paintRow(canvas, i, rect);
+    }
+  }
+
+  int get numRows => root != null ? root.subtreeSize : 0;
+
+  void _rebuildData() {
+    if (_recomputeRows) {
+      _recomputeRows = false;
+      if (root != null) {
+        double bottomPadding = 1500.0;
+        final double contentWidth = 2000.0; // TODO(jacobr): calculate max subtree depth
+        _viewportCanvas.setContentSize(
+            contentWidth, (rowHeight * numRows + bottomPadding).toDouble());
+      } else {
+        _viewportCanvas.setContentSize(0, 0);
+      }
+    }
+    _viewportCanvas.rebuild(true);
   }
 }
 

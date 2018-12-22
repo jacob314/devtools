@@ -51,31 +51,36 @@ class InspectorSelectionState {
 
 class InspectorPanel implements InspectorServiceClient {
   InspectorPanel({
-    this.inspectorService,
-    this.treeType,
+    @required this.inspectorService,
+    @required this.treeType,
     this.parentTree,
     this.isSummaryTree = true,
+    @required CoreElement container,
   })  : treeGroups = new InspectorObjectGroupManager(inspectorService, 'tree'),
         selectionGroups =
             new InspectorObjectGroupManager(inspectorService, 'selection'),
-        myRootsTree = new InspectorTree(
+        inspectorTree = new InspectorTree(
           root: InspectorTreeNode(),
           summaryTree: isSummaryTree,
           treeType: treeType,
         ) {
     _refreshRateLimiter = new RateLimiter(refreshFramesPerSecond, refresh);
 
+    container.add(inspectorTree.element);
+
     if (isSummaryTree) {
       subtreePanel = new InspectorPanel(
           inspectorService: inspectorService,
           treeType: treeType,
           parentTree: this,
-          isSummaryTree: false);
+          isSummaryTree: false,
+        container: container,
+      );
     } else {
       subtreePanel = null;
     }
 
-    myRootsTree.addSelectionChangedListener(selectionChanged);
+    inspectorTree.addSelectionChangedListener(selectionChanged);
 
     // XXX determineSplitterOrientation();
 
@@ -104,7 +109,7 @@ class InspectorPanel implements InspectorServiceClient {
 
   @protected
   InspectorPanel subtreePanel;
-  final InspectorTree myRootsTree;
+  final InspectorTree inspectorTree;
   final FlutterTreeType treeType;
   final InspectorService inspectorService;
   StreamSubscription<IsolateRef> flutterIsolateSubscription;
@@ -204,8 +209,8 @@ class InspectorPanel implements InspectorServiceClient {
       node = findMatchingInspectorTreeNode(parentTree.selectedDiagnostic);
     }
 
-    myRootsTree.nodeChanged(currentShowNode);
-    myRootsTree.nodeChanged(node);
+    inspectorTree.nodeChanged(currentShowNode);
+    inspectorTree.nodeChanged(node);
     currentShowNode = node;
     return true;
   }
@@ -255,7 +260,7 @@ class InspectorPanel implements InspectorServiceClient {
     selectedNode = null;
     subtreeRoot = null;
 
-    myRootsTree.root = new InspectorTreeNode();
+    inspectorTree.root = new InspectorTreeNode();
     if (subtreePanel != null) {
       subtreePanel.shutdownTree(isolateStopped);
     }
@@ -274,7 +279,6 @@ class InspectorPanel implements InspectorServiceClient {
     if (!visibleToUser) {
       return Future.value(null);
     }
-    // We can't efficiently refresh the full tree in legacy mode.
     recomputeTreeRoot(null, null, false);
 
     return getPendingUpdateDone();
@@ -333,9 +337,9 @@ class InspectorPanel implements InspectorServiceClient {
       if (node != null) {
         final InspectorTreeNode rootNode =
             setupInspectorTreeNode(new InspectorTreeNode(), node, true);
-        myRootsTree.root = rootNode;
+        inspectorTree.root = rootNode;
       } else {
-        myRootsTree.root = new InspectorTreeNode();
+        inspectorTree.root = new InspectorTreeNode();
       }
       refreshSelection(newSelection, detailsSelection, setSubtreeRoot);
     } catch (error) {
@@ -359,7 +363,7 @@ class InspectorPanel implements InspectorServiceClient {
     // TODO(jacobr): handle render objects subtree panel and other subtree panels here.
 
     this.subtreeRoot = subtreeRoot;
-    myRootsTree.highlightedRoot = getSubtreeRootNode();
+    inspectorTree.highlightedRoot = getSubtreeRootNode();
     if (subtreePanel != null) {
       subtreePanel.setSubtreeRoot(subtreeRoot, subtreeSelection);
     }
@@ -408,14 +412,14 @@ class InspectorPanel implements InspectorServiceClient {
         subtreePanel.setSubtreeRoot(newSelection, detailsSelection);
       }
     }
-    myRootsTree.highlightedRoot = getSubtreeRootNode();
+    inspectorTree.highlightedRoot = getSubtreeRootNode();
 
     syncTreeSelection();
   }
 
   void syncTreeSelection() {
     programaticSelectionChangeInProgress = true;
-    myRootsTree.selection = selectedNode;
+    inspectorTree.selection = selectedNode;
     programaticSelectionChangeInProgress = false;
     animateTo(selectedNode);
   }
@@ -449,7 +453,7 @@ class InspectorPanel implements InspectorServiceClient {
       // The value isn't shown in the parent tree. Nothing to do.
       return;
     }
-    myRootsTree.nodeChanged(node);
+    inspectorTree.nodeChanged(node);
   }
 
   InspectorTreeNode setupInspectorTreeNode(InspectorTreeNode node,
@@ -481,18 +485,18 @@ class InspectorPanel implements InspectorServiceClient {
     if (treeNode.children.isNotEmpty) {
       // Only case supported is this is the loading node.
       assert(treeNode.children.length == 1);
-      myRootsTree.removeNodeFromParent(treeNode.children.first);
+      inspectorTree.removeNodeFromParent(treeNode.children.first);
     }
     final inlineProperties = parent.inlineProperties;
 
     if (inlineProperties != null) {
       for (DiagnosticsNode property in inlineProperties) {
-        myRootsTree.appendChild(treeNode,
+        inspectorTree.appendChild(treeNode,
             setupInspectorTreeNode(new InspectorTreeNode(), property, false));
       }
     }
     for (DiagnosticsNode child in children) {
-      myRootsTree.appendChild(
+      inspectorTree.appendChild(
           treeNode,
           setupInspectorTreeNode(
               new InspectorTreeNode(), child, expandChildren));
@@ -657,9 +661,9 @@ class InspectorPanel implements InspectorServiceClient {
         if (treeNode.children.isEmpty) {
           setupChildren(diagnostic, treeNode, children, true);
         }
-        myRootsTree.nodeChanged(treeNode);
+        inspectorTree.nodeChanged(treeNode);
         if (treeNode == selectedNode) {
-          myRootsTree.expandPath(treeNode);
+          inspectorTree.expandPath(treeNode);
         }
       } catch (e) {
         _logError(e);
@@ -673,7 +677,7 @@ class InspectorPanel implements InspectorServiceClient {
     }
     if (selectedNode != null) {
       if (!detailsSubtree) {
-        myRootsTree.nodeChanged(selectedNode.parent);
+        inspectorTree.nodeChanged(selectedNode.parent);
       }
     }
     selectedNode = newSelection;
@@ -693,7 +697,7 @@ class InspectorPanel implements InspectorServiceClient {
       return;
     }
 
-    final InspectorTreeNode node = myRootsTree.selection;
+    final InspectorTreeNode node = inspectorTree.selection;
     if (node != null) {
       maybePopulateChildren(node);
     }
@@ -738,7 +742,7 @@ class InspectorPanel implements InspectorServiceClient {
   void syncSelectionHelper(
       bool maybeRerootSubtree, DiagnosticsNode detailsSelection) {
     if (!detailsSubtree && selectedNode != null) {
-      myRootsTree.nodeChanged(selectedNode.parent);
+      inspectorTree.nodeChanged(selectedNode.parent);
     }
     final DiagnosticsNode diagnostic = getSelectedDiagnostic();
     if (diagnostic != null) {
@@ -826,7 +830,8 @@ class InspectorScreen extends Screen {
   InspectorService inspectorService;
   InspectorPanel inspectorPanel;
   ProgressElement progressElement;
-  CoreElement tableContainer;
+  CoreElement inspectorContainer;
+  CoreElement inspectorSection;
 
   @override
   void createContent(Framework framework, CoreElement mainDiv) {
@@ -849,7 +854,10 @@ class InspectorScreen extends Screen {
               div()..flex(),
             ])
         ]),
-      tableContainer = div(c: 'section overflow-auto')..layoutHorizontal(),
+      inspectorSection = div(c: 'section overflow-auto')..layoutHorizontal()
+        ..add([
+          inspectorContainer = div(c: 'inspector-container'),
+        ]),
     ]);
 
     // TODO(devoncarew): don't rebuild until the component is active
@@ -870,21 +878,6 @@ class InspectorScreen extends Screen {
 
   String get _isolateId => serviceManager.isolateManager.selectedIsolate.id;
 
-  Future<Null> _loadInspector() async {
-    refreshTreeButton.disabled = true;
-
-    final Spinner spinner = new Spinner()..clazz('padded');
-    tableContainer.element.children.add(spinner.element);
-
-    // TODO(devoncarew): error handling
-
-    try {
-      spinner.element.remove();
-    } finally {
-      refreshTreeButton.disabled = false;
-    }
-  }
-
   // TODO(jacobr): Update this url.
   @override
   HelpInfo get helpInfo =>
@@ -893,13 +886,26 @@ class InspectorScreen extends Screen {
   void _handleConnectionStart(VmService service) async {
     refreshTreeButton.disabled = false;
 
+    final Spinner spinner = new Spinner()..clazz('padded');
+    inspectorContainer.element.children.add(spinner.element);
+
     inspectorService = await InspectorService.create(service);
-    // TODO(jacobr): handle connections that started and stopped immediately.
+
+
+    // TODO(jacobr): error handling
+
+    try {
+      spinner.element.remove();
+    } finally {
+      refreshTreeButton.disabled = false;
+    }
 
     inspectorPanel = new InspectorPanel(
       inspectorService: inspectorService,
       treeType: FlutterTreeType.widget,
+      container: inspectorContainer,
     );
+    inspectorPanel.setVisibleToUser(true);
     // XXX update UI.
   }
 
@@ -912,6 +918,6 @@ class InspectorScreen extends Screen {
   }
 
   void _refreshInspector() {
-    print('XXX refresh inspector');
+    inspectorPanel?.onForceRefresh();
   }
 }

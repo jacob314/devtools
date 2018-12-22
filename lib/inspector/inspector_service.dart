@@ -214,7 +214,6 @@ class InspectorService {
     if (json['errorMessage'] != null) {
       throw new Exception('$methodName -- ${json['errorMessage']}');
     }
-    print('XXX FIGURE OUT WHAT THE schema IS: $json');
     return json['result'];
   }
 }
@@ -235,7 +234,7 @@ class ObjectGroup {
   /// Object group all objects in this arena are allocated with.
   final String groupName;
   final InspectorService inspectorService;
-  bool disposed;
+  bool disposed = false;
 
   EvalOnDartLibrary get inspectorLibrary => inspectorService.inspectorLibrary;
   bool get useDaemonApi => inspectorService.useDaemonApi;
@@ -361,7 +360,6 @@ class ObjectGroup {
       if (json['errorMessage'] != null) {
         throw new Exception('$extension -- ${json['errorMessage']}');
       }
-      print('XXX FIGURE OUT WHAT THE schema IS: $json');
       return json['result'];
     });
   }
@@ -370,20 +368,11 @@ class ObjectGroup {
   Future<Object> invokeServiceMethodDaemonParams(
     String methodName,
     Map<String, Object> params,
-  ) async {
-    final Map<String, Object> json =
-        await inspectorService.inspectorLibrary.addRequest(this, () {
-      return _callServiceExtension(
-        'ext.flutter.inspector.$methodName',
-        params,
-      );
-    });
-    if (json == null) return null;
-    if (json.containsKey('errorMessage')) {
-      final message = json['errorMessage'];
-      throw new Exception('$methodName -- $message');
-    }
-    return json['result'];
+  ) {
+    return _callServiceExtension(
+      'ext.flutter.inspector.$methodName',
+      params,
+    );
   }
 
   Future<Map<String, Object>> invokeServiceMethodDaemonInspectorRef(

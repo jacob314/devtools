@@ -9,13 +9,14 @@ String fontStyleToCss(TextStyle textStyle) {
   if (textStyle.fontWeight != null) {
     sb.write('{textStyle.fontWeight.index + 1 * 100} ');
   }
-  if (textStyle.fontSize != null) {
-    sb.write('${textStyle.fontSize}px ');
-  }
-  if (textStyle.fontFamily != null) {
-    sb.write('${textStyle.fontFamily} ');
-  }
+  sb.write('${textStyle.fontSize ?? 14}px ');
+  sb.write('${textStyle.fontFamily ?? 'Arial'} ');
   return sb.toString();
 }
 
-String colorToCss(Color color) => '#${color.value.toRadixString(16).padLeft(8, '0')}';
+String colorToCss(Color color) {
+  return 'rgba(${color.red}, ${color.green}, ${color.blue}, ${color.alpha})';
+  // We would prefer to write
+  // '#${color.value.toRadixString(16).padLeft(8, '0')}';
+  // but the alpha channel is out of order.color
+}
