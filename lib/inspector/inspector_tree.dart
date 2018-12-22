@@ -307,7 +307,7 @@ class InspectorTree extends Object with SetStateMixin, OnAddedToDomMixin {
   InspectorTreeNode highlightedRoot;
   DiagnosticsNode selectedValue;
 
-  Set<VoidCallback> selectionChangeCallbacks;
+  Set<VoidCallback> selectionChangeCallbacks = new Set();
   final bool summaryTree;
   final FlutterTreeType treeType;
   final Icon defaultIcon;
