@@ -194,8 +194,8 @@ class EvalOnDartLibrary {
     ObjectGroup isAlive, {
     int offset,
     int count,
-  }) {
-    return addRequest(
+  }) async {
+    return await addRequest(
         isAlive,
         () => service.getObject(_isolateId, instance.id,
             offset: offset, count: count));
