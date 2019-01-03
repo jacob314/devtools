@@ -2,11 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:html' as html;
 import 'package:devtools/service_extensions.dart' as extensions;
 import '../framework/framework.dart';
 import '../globals.dart';
 import '../ui/elements.dart';
 import '../ui/ui_utils.dart';
+
 
 class DeviceScreen extends Screen {
   DeviceScreen()
@@ -37,7 +39,15 @@ class DeviceScreen extends Screen {
         ]),
       div(c: 'section')
         ..add(<CoreElement>[
-          div(text: 'Framework toggles', c: 'title'),
+          div(text: 'Framework toggles', c: 'title')
+            ..click(() async {
+              print("XXX click");
+              var responses = await serviceManager.callMulticastService('exampleJacob');
+              for (var response in responses) {
+                print("XXX got response $response, RESULT: ${response.json['result']}");
+                html.window.console.log(response);
+              }
+            }),
           togglesDiv = div(),
         ])
     ]);
