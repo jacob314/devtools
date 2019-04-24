@@ -121,7 +121,7 @@ class InspectorTreeNodeRenderHtmlBuilder
       'inspector-style-${treeStyleToName[treeStyle]}',
     ];
     if (!allowWrap) {
-      classes.add('inspector-no-wrap');
+      // XXX // classes.add('inspector-no-wrap');
     }
     return InspectorTreeNodeHtmlRender(_entries, const Size(0, 0), classes);
   }

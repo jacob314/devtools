@@ -40,6 +40,21 @@ class LoggingScreen extends Screen {
     logCountStatus.element.text = '';
     addStatusItem(logCountStatus);
 
+    const String structuredErrorsExtension =
+        'ext.flutter.inspector.structuredErrors';
+    serviceManager.serviceExtensionManager.hasServiceExtension(
+      structuredErrorsExtension,
+      (available) {
+        if (available) {
+          serviceManager.serviceExtensionManager.setServiceExtensionState(
+            structuredErrorsExtension,
+            true,
+            true,
+          );
+        }
+      },
+    );
+
     serviceManager.onConnectionAvailable.listen(_handleConnectionStart);
     if (serviceManager.hasConnection) {
       _handleConnectionStart(serviceManager.service);
@@ -85,7 +100,6 @@ class LoggingScreen extends Screen {
           _createTableView()
             ..layoutHorizontal()
             ..clazz('section')
-            ..clazz('full-size')
             ..flex(),
           logDetailsUI = LogDetailsUI(),
         ]),
@@ -624,9 +638,10 @@ String getCssClassForEventKind(LogData item) {
 }
 
 class LogDetailsUI extends CoreElement {
-  LogDetailsUI() : super('div', classes: 'full-size') {
+  LogDetailsUI() : super('div') {
     layoutVertical();
     flex();
+    element.style.overflow = 'scroll';
 
     add(<CoreElement>[
       content = div(c: 'log-details table-border')

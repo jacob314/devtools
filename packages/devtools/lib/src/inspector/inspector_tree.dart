@@ -705,8 +705,7 @@ abstract class InspectorTree {
     //  by default and which aren't.
     switch (style) {
       case DiagnosticsTreeStyle.singleLine:
-      case DiagnosticsTreeStyle.headerLine:
-      case DiagnosticsTreeStyle.indentedSingleLine:
+      case DiagnosticsTreeStyle.errorProperty:
         return false;
 
       case DiagnosticsTreeStyle.sparse:

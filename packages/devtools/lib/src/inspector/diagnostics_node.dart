@@ -24,9 +24,7 @@ const Map<String, DiagnosticLevel> nameToDiagnosticLevel = {
   'info': DiagnosticLevel.info,
   'warning': DiagnosticLevel.warning,
   'hint': DiagnosticLevel.hint,
-  'fix': DiagnosticLevel.fix,
-  'contract': DiagnosticLevel.contract,
-  'violation': DiagnosticLevel.violation,
+  'summary': DiagnosticLevel.summary,
   'error': DiagnosticLevel.error,
   'off': DiagnosticLevel.off,
 };
@@ -43,8 +41,7 @@ const Map<String, DiagnosticsTreeStyle> nameToTreeStyle = {
   'error': DiagnosticsTreeStyle.error,
   'flat': DiagnosticsTreeStyle.flat,
   'singleLine': DiagnosticsTreeStyle.singleLine,
-  'headerLine': DiagnosticsTreeStyle.headerLine,
-  'indentedSingleLine': DiagnosticsTreeStyle.indentedSingleLine,
+  'errorProperty': DiagnosticsTreeStyle.errorProperty,
   'shallow': DiagnosticsTreeStyle.shallow,
   'truncateChildren': DiagnosticsTreeStyle.truncateChildren,
 };
