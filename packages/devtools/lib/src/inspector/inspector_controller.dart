@@ -40,6 +40,8 @@ TextStyle textStyleForLevel(DiagnosticLevel level) {
       return inspector_text_styles.warning;
     case DiagnosticLevel.error:
       return inspector_text_styles.error;
+    case DiagnosticLevel.summary:
+      return inspector_text_styles.summary;
     case DiagnosticLevel.debug:
     case DiagnosticLevel.info:
     case DiagnosticLevel.fine:

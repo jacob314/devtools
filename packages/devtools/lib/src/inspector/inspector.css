@@ -104,28 +104,25 @@ messages beautiful.
 
 }
 .inspector-level-debug {
-
 }
+
 .inspector-level-info {
 
 }
 .inspector-level-warning {
 
 }
+
+.inspector-level-summary {
+    margin: 5px 0;
+}
+
 .inspector-level-hint {
     background-color: var(--hint-background);
     padding: 8px;
     margin: 5px 0;
 }
-.inspector-level-fix {
 
-}
-.inspector-level-contract {
-
-}
-.inspector-level-violation {
-
-}
 .inspector-level-error {
 
 }

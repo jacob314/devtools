@@ -11,6 +11,10 @@ final TextStyle warning = TextStyle(
 final TextStyle error = TextStyle(
   color: ThemedColor(Colors.red.shade500, Colors.red.shade400),
 );
+final TextStyle summary = TextStyle(
+  color: ThemedColor(Colors.red.shade500, Colors.red.shade400),
+  fontWeight: FontWeight.bold,
+);
 final TextStyle link = TextStyle(
   color: ThemedColor(Colors.blue.shade700, Colors.blue.shade300),
   decoration: TextDecoration.underline,

@@ -121,7 +121,7 @@ class InspectorTreeNodeRenderHtmlBuilder
       'inspector-style-${treeStyleToName[treeStyle]}',
     ];
     if (!allowWrap) {
-      // XXX // classes.add('inspector-no-wrap');
+      classes.add('inspector-no-wrap');
     }
     return InspectorTreeNodeHtmlRender(_entries, const Size(0, 0), classes);
   }
@@ -183,6 +183,11 @@ class InspectorTreeHtml extends InspectorTree implements InspectorTreeWeb {
     _container.onClick.listen(onMouseClick);
     _container.element.onMouseMove.listen(onMouseMove);
     _container.element.onMouseLeave.listen(onMouseLeave);
+  }
+
+  @override
+  double getDepthIndent(int depth) {
+    return depth * columnWidth;
   }
 
   InspectorTreeRow _resolveTreeRow(Element e) {

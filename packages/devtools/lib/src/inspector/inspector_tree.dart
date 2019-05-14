@@ -412,18 +412,22 @@ abstract class InspectorTreeNode {
         final child = children[i];
         final subtreeSize = child.subtreeSize;
         if (current + subtreeSize > index) {
+          final style = node.diagnostic.style;
           node = child;
           if (children.length > 1 &&
               i + 1 != children.length &&
               !children.last.isProperty) {
             ticks.add(depth);
           }
+          if (style != DiagnosticsTreeStyle.flat &&
+              style != DiagnosticsTreeStyle.error) {
+            depth++;
+          }
           break;
         }
         current += subtreeSize;
       }
       assert(i < children.length);
-      depth++;
     }
     assert(false); // internal error.
     return null;
