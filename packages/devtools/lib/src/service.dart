@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:html' hide Event;
+import 'package:devtools/src/config_specific/html.dart' hide Event;
 import 'dart:typed_data';
 
 import 'package:sse/client/sse_client.dart';

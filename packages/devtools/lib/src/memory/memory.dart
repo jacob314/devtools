@@ -4,7 +4,7 @@
 
 import 'dart:async';
 import 'dart:collection';
-import 'dart:html' as html;
+import 'package:devtools/src/config_specific/html.dart' as html;
 
 import 'package:meta/meta.dart';
 import 'package:vm_service/vm_service.dart';

@@ -4,7 +4,7 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:html';
+import 'package:devtools/src/config_specific/html.dart';
 import 'dart:math' as math;
 
 import 'package:meta/meta.dart';

@@ -6,7 +6,7 @@
 library icon_renderer;
 
 import 'dart:async';
-import 'dart:html';
+import 'package:devtools/src/config_specific/html.dart';
 
 import 'package:meta/meta.dart';
 

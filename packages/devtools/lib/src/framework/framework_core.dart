@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:html' hide Screen;
+import 'package:devtools/src/config_specific/html.dart' hide Screen;
 
 import '../../devtools.dart' as devtools show version;
 import '../core/message_bus.dart';

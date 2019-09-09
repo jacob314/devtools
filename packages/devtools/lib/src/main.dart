@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:html' as html;
+import 'package:devtools/src/config_specific/html.dart' as html;
 
 import 'package:vm_service/vm_service.dart';
 

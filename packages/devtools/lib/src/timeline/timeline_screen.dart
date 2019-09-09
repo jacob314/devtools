@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 import 'dart:convert';
-import 'dart:html' as html;
+import 'package:devtools/src/config_specific/html.dart' as html;
 import 'dart:math' as math;
 
 import 'package:meta/meta.dart';

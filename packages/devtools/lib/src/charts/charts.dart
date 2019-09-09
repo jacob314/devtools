@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:html' show Element, window, Rectangle, Event;
+import 'package:devtools/src/config_specific/html.dart' show Element, window, Rectangle, Event;
 import 'dart:math' as math;
 
 import '../framework/framework.dart';

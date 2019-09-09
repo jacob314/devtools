@@ -5,7 +5,7 @@
 library inspector;
 
 import 'dart:async';
-import 'dart:html' show Element;
+import 'package:devtools/src/config_specific/html.dart' show Element;
 
 import 'package:split/split.dart';
 import 'package:vm_service/vm_service.dart';
