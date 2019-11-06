@@ -429,8 +429,6 @@ abstract class InspectorTreeController {
   }
 
   set selection(InspectorTreeNode node) {
-    if (node == _selection) return;
-
     setState(() {
       _selection?.selected = false;
       _selection = node;
