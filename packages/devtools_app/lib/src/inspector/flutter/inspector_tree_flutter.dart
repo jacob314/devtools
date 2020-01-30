@@ -7,6 +7,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pedantic/pedantic.dart';
+import 'package:flutter_widgets/flutter_widgets.dart';
 
 import '../../flutter/auto_dispose_mixin.dart';
 import '../../flutter/collapsible_mixin.dart';
@@ -37,6 +38,12 @@ class _InspectorTreeRowWidget extends StatefulWidget {
 
 class _InspectorTreeRowState extends State<_InspectorTreeRowWidget>
     with TickerProviderStateMixin, CollapsibleAnimationMixin {
+
+  @override
+  void didUpdateWidget(Widget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+  }
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -72,7 +79,7 @@ class _InspectorTreeRowState extends State<_InspectorTreeRowWidget>
 }
 
 class InspectorTreeControllerFlutter extends Object
-    with InspectorTreeController, InspectorTreeFixedRowHeightController {
+    with InspectorTreeController {
   /// Client the controller notifies to trigger changes to the UI.
   InspectorControllerClient get client => _client;
   InspectorControllerClient _client;
@@ -92,22 +99,8 @@ class InspectorTreeControllerFlutter extends Object
   InspectorTreeNode createNode() => InspectorTreeNode();
 
   @override
-  Rect getBoundingBox(InspectorTreeRow row) {
-    // For future reference: the bounding box likely needs to be in terms of
-    // positions after the current animations are complete so that computations
-    // to start animations to show specific widget scroll to where the target
-    // nodes will be displayed rather than where they are currently displayed.
-    return Rect.fromLTWH(
-      getDepthIndent(row.depth),
-      getRowY(row.index),
-      rowWidth,
-      rowHeight,
-    );
-  }
-
-  @override
-  void scrollToRect(Rect targetRect) {
-    client?.scrollToRect(targetRect);
+  void animateToTargets(List<InspectorTreeNode> targets) {
+    client?.animateToTargets(targets);
   }
 
   @override
@@ -143,7 +136,7 @@ class InspectorTreeControllerFlutter extends Object
 abstract class InspectorControllerClient {
   void onChanged();
 
-  void scrollToRect(Rect rect);
+  void animateToTargets(List<InspectorTreeNode> targets);
 }
 
 class InspectorTree extends StatefulWidget {
@@ -167,11 +160,19 @@ class _InspectorTreeState extends State<InspectorTree>
         AutomaticKeepAliveClientMixin<InspectorTree>,
         AutoDisposeMixin
     implements InspectorControllerClient {
+<<<<<<< HEAD
+=======
+  final defaultAnimationDuration = const Duration(milliseconds: 500);
+  final slowAnimationDuration = const Duration(milliseconds: 1000);
+
+  ItemPositionsListener _itemPositionsListener;
+
+>>>>>>> Checkpoint of better scrolling animated inspector tree.
   InspectorTreeControllerFlutter get controller => widget.controller;
 
   bool get isSummaryTree => widget.isSummaryTree;
 
-  ScrollController _scrollControllerY;
+  ItemScrollController _scrollControllerY;
   ScrollController _scrollControllerX;
   Future<void> currentAnimateY;
   Rect currentAnimateTarget;
@@ -182,8 +183,9 @@ class _InspectorTreeState extends State<InspectorTree>
   void initState() {
     super.initState();
     _scrollControllerX = ScrollController();
-    _scrollControllerY = ScrollController();
-    _scrollControllerY.addListener(_onScrollYChange);
+    _scrollControllerY = ItemScrollController();
+    _itemPositionsListener = ItemPositionsListener.create();
+
     if (isSummaryTree) {
       constraintDisplayController = longAnimationController(this);
     }
@@ -207,7 +209,6 @@ class _InspectorTreeState extends State<InspectorTree>
     super.dispose();
     controller?.client = null;
     _scrollControllerX.dispose();
-    _scrollControllerY.dispose();
     constraintDisplayController?.dispose();
   }
 
@@ -219,7 +220,8 @@ class _InspectorTreeState extends State<InspectorTree>
     // the horizontal position has already been triggered.
     if (currentAnimateY != null) return;
 
-    final x = _computeTargetX(_scrollControllerY.offset);
+    final positions = _itemPositionsListener.itemPositions.value;
+    final x = _computeTargetX(positions);
     _scrollControllerX.animateTo(
       x,
       duration: defaultDuration,
@@ -231,27 +233,20 @@ class _InspectorTreeState extends State<InspectorTree>
   ///
   /// This enables animating the x scroll as the y scroll changes which helps
   /// keep the relevant content in view while scrolling a large list.
-  double _computeTargetX(double y) {
-    final rowIndex = controller.getRowIndex(y);
+  double _computeTargetX(Iterable<ItemPosition> visibleRows) {
     double requiredOffset;
     double minOffset = double.infinity;
     // TODO(jacobr): use maxOffset as well to better handle the case where the
     // previous row has a significantly larger indent.
 
-    // TODO(jacobr): if the first or last row is only partially visible, tween
-    // between its indent and the next row to more smoothly change the target x
-    // as the y coordinate changes.
-    if (rowIndex == controller.numRows) {
+    if (visibleRows.isEmpty) {
       return 0;
     }
-    final endY = y += _scrollControllerY.position.viewportDimension;
-    for (int i = rowIndex; i < controller.numRows; i++) {
-      final rowY = controller.getRowY(i);
-      if (rowY >= endY) break;
-
-      final row = controller.getCachedRow(i);
+    for (ItemPosition visibleRow in visibleRows) {
+      final row = controller.getCachedRow(visibleRow.index);
       if (row == null) continue;
-      final rowOffset = controller.getRowOffset(i);
+      // TODO(jacobr)
+      final rowOffset = controller.getRowOffset(visibleRow.index);
       if (row.isSelected) {
         requiredOffset = rowOffset;
       }
@@ -265,6 +260,7 @@ class _InspectorTreeState extends State<InspectorTree>
   }
 
   @override
+<<<<<<< HEAD
   Future<void> scrollToRect(Rect rect) async {
     if (rect == currentAnimateTarget) {
       // We are in the middle of an animation to this exact rectangle.
@@ -296,37 +292,26 @@ class _InspectorTreeState extends State<InspectorTree>
       await currentAnimateY;
     } catch (e) {
       // Doesn't matter if the animation was cancelled.
-    }
-    currentAnimateY = null;
-    currentAnimateTarget = null;
-  }
+=======
+  void animateToTargets(List<InspectorTreeNode> targets) {
+    Set<InspectorTreeNode> visible = Set.identity();
 
-  /// Animate so that the entire range minOffset to maxOffset is within view.
-  double _computeTargetOffsetY(
-    ScrollController controller,
-    double minOffset,
-    double maxOffset,
-  ) {
-    final currentOffset = controller.offset;
-    final viewportDimension = _scrollControllerY.position.viewportDimension;
-    final currentEndOffset = viewportDimension + currentOffset;
-
-    // If the requested range is larger than what the viewport can show at once,
-    // prioritize showing the start of the range.
-    maxOffset = min(viewportDimension + minOffset, maxOffset);
-    if (currentOffset <= minOffset && currentEndOffset >= maxOffset) {
-      return controller
-          .offset; // Nothing to do. The whole range is already in view.
-    }
-    if (currentOffset > minOffset) {
-      // Need to scroll so the minOffset is in view.
-      return minOffset;
+    for (var position in _itemPositionsListener.itemPositions.value) {
+      final row = controller.getCachedRow(position.index);
+      if (position.itemLeadingEdge >= 0 && position.itemTrailingEdge <= 1)
+      if (row != null && row.node != null) {
+        visible.add(row.node);
+      }
+>>>>>>> Checkpoint of better scrolling animated inspector tree.
     }
 
-    assert(currentEndOffset < maxOffset);
-    // Need to scroll so the maxOffset is in view at the very bottom of the
-    // list view.
-    return maxOffset - viewportDimension;
+    for (var target in targets) {
+      if (!visible.contains(target)) {
+        // TODO(jacobr): be smarter about scrolling only as much as needed.
+        _scrollControllerY.scrollTo(index: controller.getRowForNode(targets.first).index, duration: slowAnimationDuration);
+        return;
+      }
+    }
   }
 
   void _bindToController() {
@@ -353,20 +338,18 @@ class _InspectorTreeState extends State<InspectorTree>
         child: SizedBox(
           width: controller.rowWidth + controller.maxRowIndent,
           child: Scrollbar(
-            child: ListView.custom(
-              itemExtent: rowHeight,
-              childrenDelegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final InspectorTreeRow row = controller.root?.getRow(index);
-                  return _InspectorTreeRowWidget(
-                    key: PageStorageKey(row?.node),
-                    inspectorTreeState: this,
-                    row: row,
-                  );
-                },
-                childCount: controller.numRows,
-              ),
-              controller: _scrollControllerY,
+            child: ScrollablePositionedList.builder(
+              itemBuilder: (context, index) {
+                final InspectorTreeRow row = controller.getCachedRow(index);
+                return _InspectorTreeRowWidget(
+                  key: PageStorageKey(row?.node),
+                  inspectorTreeState: this,
+                  row: row,
+                );
+              },
+              itemPositionsListener: _itemPositionsListener,
+              itemCount: controller.numRows,
+              itemScrollController: _scrollControllerY,
             ),
           ),
         ),
@@ -502,18 +485,20 @@ class InspectorRowContent extends StatelessWidget {
                       ),
                     )
                   : const SizedBox(width: 16.0, height: 16.0),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: backgroundColor,
-                ),
-                child: InkWell(
-                  onTap: () {
-                    controller.onSelectRow(row);
-                  },
-                  child: Container(
-                    height: rowHeight,
-                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                    child: DiagnosticsNodeDescription(node.diagnostic),
+              Expanded(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: backgroundColor,
+                  ),
+                  child: InkWell(
+                    onTap: () {
+                      controller.onSelectRow(row);
+                    },
+                    child: Container(
+                      height: rowHeight,
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                      child: DiagnosticsNodeDescription(node.diagnostic),
+                    ),
                   ),
                 ),
               ),

@@ -213,9 +213,10 @@ class InspectorTreeNode {
 
   set isExpanded(bool value) {
     if (value != _isExpanded) {
+      final bool updateChildren = _shouldShow ?? false;
       _isExpanded = value;
       isDirty = true;
-      if (_shouldShow ?? false) {
+      if (updateChildren) {
         for (var child in children) {
           child.updateShouldShow(value);
         }
@@ -240,9 +241,6 @@ class InspectorTreeNode {
   }
 
   int get childrenCount {
-    if (!isExpanded) {
-      _childrenCount = 0;
-    }
     if (_childrenCount != null) {
       return _childrenCount;
     }
@@ -288,6 +286,7 @@ class InspectorTreeNode {
   // TODO: optimize this method.
   /// Use [getCachedRow] wherever possible, as [getRow] is slow and can cause
   /// performance problems.
+  @protected
   InspectorTreeRow getRow(int index) {
     final List<int> ticks = <int>[];
     InspectorTreeNode node = this;

@@ -10,6 +10,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 
+import 'package:devtools_app/src/ui/html_elements.dart';
 import 'package:meta/meta.dart';
 import 'package:vm_service/vm_service.dart';
 
@@ -180,11 +181,52 @@ class InspectorService extends DisposableController
     return false;
   }
 
+  List<String> _cachedRootDirectories;
+
+  bool _isLocalUri(String uri) {
+    if (uri.startsWith('package:')) {
+      uri = Uri.parse(uri).path;
+    }
+    for (var root in _cachedRootDirectories) {
+      if (root.endsWith(uri)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  final Map<String, ClassRef> localClasses = {};
   /// As we aren't running from an IDE, we don't know exactly what the pub root
   /// directories are for the current project so we make a best guess if needed
   /// based on the the root directory of the first non artifical widget in the
   /// tree.
-  Future<String> inferPubRootDirectoryIfNeeded() async {
+  Future<List<String>> inferPubRootDirectoryIfNeeded() async {
+    final directory = await inferPubRootDirectoryIfNeededHelper();
+    List<String> directories;
+    if (directory == null) {
+      directories = await getPubRootDirectories();
+    } else {
+      directories = [directory];
+    }
+
+    final group = createObjectGroup('temp');
+
+    _cachedRootDirectories = directories;
+
+    final isolate = inspectorLibrary.isolate;
+    for (var libraryRef in isolate.libraries) {
+      if (_isLocalUri(libraryRef.uri)) {
+        Library library = await inspectorLibrary.service.getObject(isolate.id, libraryRef.id);
+        for (var classRef in library.classes) {
+          localClasses[classRef.name] = classRef;
+        }
+      }
+    }
+
+    return directories;
+  }
+
+  Future<String> inferPubRootDirectoryIfNeededHelper() async {
     final group = createObjectGroup('temp');
     final root = await group.getRoot(FlutterTreeType.widget);
 
@@ -370,6 +412,16 @@ class InspectorService extends DisposableController
       'setPubRootDirectories',
       rootDirectories,
     );
+  }
+
+  Future<List<String>> getPubRootDirectories() {
+    // No need to call this from a breakpoint.
+    assert(useDaemonApi);
+    final result = invokeServiceMethodDaemonNoGroup(
+      'getPubRootDirectories',
+      null
+    );
+    return result ?? [];
   }
 
   Future<InstanceRef> invokeServiceMethodObservatoryNoGroup(String methodName) {
