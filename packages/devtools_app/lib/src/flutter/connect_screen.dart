@@ -37,6 +37,7 @@ class _ConnectScreenBodyState extends State<ConnectScreenBody> {
   void initState() {
     super.initState();
     controller = TextEditingController();
+    controller.text = "http://127.0.0.1:55175/IQGX1d-fd0g=/"; // XXX NO COMMIT
   }
 
   @override

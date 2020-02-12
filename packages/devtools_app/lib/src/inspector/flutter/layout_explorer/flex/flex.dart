@@ -16,6 +16,7 @@ import '../../../../utils.dart';
 import '../../../diagnostics_node.dart';
 import '../../../inspector_controller.dart';
 import '../../../inspector_service.dart';
+import '../../../inspector_tree.dart';
 import '../../inspector_data_models.dart';
 import '../../inspector_service_flutter_extension.dart';
 import 'arrow.dart';
@@ -34,7 +35,7 @@ const arrowStrokeWidth = 1.5;
 
 /// Hardcoded sizes for scaling the flex children widget properly.
 const minRenderWidth = 250.0;
-const minRenderHeight = 250.0;
+const minRenderHeight = 200.0;
 
 const minPadding = 2.0;
 const overflowTextHorizontalPadding = 8.0;
@@ -45,7 +46,7 @@ const entranceMargin = 50.0;
 const defaultMaxRenderWidth = 400.0;
 const defaultMaxRenderHeight = 400.0;
 
-const widgetTitleMaxWidthPercentage = 0.75;
+const widgetTitleMaxWidthPercentage = 0.95;
 
 /// Hardcoded arrow size respective to its cross axis (because it's unconstrained).
 const heightAndConstraintIndicatorSize = 48.0;
@@ -594,6 +595,9 @@ class _FlexLayoutExplorerWidgetState extends State<FlexLayoutExplorerWidget>
           for (var i = 0; i < children.length; i++)
             FlexChildVisualizer(
               state: this,
+              minimizeUiHeight: properties.direction == Axis.vertical,
+              summaryTreeNode: inspectorController
+                  .findMatchingInspectorTreeNode(children[i].node),
               backgroundColor: highlighted == children[i]
                   ? theme.activeBackgroundColor
                   : theme.inActiveBackgroundColor,
@@ -793,7 +797,7 @@ class _FlexLayoutExplorerWidgetState extends State<FlexLayoutExplorerWidget>
         child: InkWell(
           onTap: () => onTap(properties),
           child: WidgetVisualizer(
-            title: flexType,
+            title: flexType, // TODO(jacobr): include actual node name as well?
             backgroundColor:
                 highlighted == properties ? theme.activeBackgroundColor : null,
             borderColor: mainAxisColor,
@@ -931,17 +935,23 @@ class FlexChildVisualizer extends StatelessWidget {
   const FlexChildVisualizer({
     Key key,
     @required this.state,
+    @required this.minimizeUiHeight,
     @required this.renderProperties,
+    @required this.summaryTreeNode,
     @required this.backgroundColor,
     @required this.borderColor,
     @required this.textColor,
   }) : super(key: key);
 
   final _FlexLayoutExplorerWidgetState state;
+  final InspectorTreeNode summaryTreeNode;
 
   final Color backgroundColor;
   final Color borderColor;
   final Color textColor;
+
+  // Whether we should minimize the height or width of the UI displayed.
+  final bool minimizeUiHeight;
 
   final RenderProperties renderProperties;
 
@@ -1023,38 +1033,80 @@ class FlexChildVisualizer extends StatelessWidget {
   }
 
   Widget _buildContent() {
+    final changeFlex = Flexible(
+      child: _buildFlexFactorChangerDropdown(maximumFlexFactorOptions),
+    );
+    Widget buildUnconstrainedWarning() {
+      return Text(
+        'unconstrained ${root.isMainAxisHorizontal ? 'horizontal' : 'vertical'}',
+        style: TextStyle(
+          color: ThemedColor(
+            const Color(0xFFD08A29),
+            Colors.orange.shade700,
+          ),
+          fontStyle: FontStyle.italic,
+        ),
+        maxLines: 2,
+        softWrap: true,
+        overflow: TextOverflow.ellipsis,
+        textScaleFactor: smallTextScaleFactor,
+        textAlign: TextAlign.center,
+      );
+    }
+
+    Widget content;
+    if (minimizeUiHeight) {
+      content = Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          changeFlex,
+          const SizedBox(width: 6.0),
+          _buildFlexFitChangerDropdown(),
+        ],
+      );
+      if (!properties.hasFlexFactor) {
+        content = Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              content,
+              buildUnconstrainedWarning(),
+            ]);
+      }
+    } else {
+      content = Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          changeFlex,
+          if (!properties.hasFlexFactor) buildUnconstrainedWarning(),
+          _buildFlexFitChangerDropdown(),
+        ],
+      );
+    }
     return Container(
       margin: const EdgeInsets.only(
         top: margin,
         left: margin,
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Flexible(
-            child: _buildFlexFactorChangerDropdown(maximumFlexFactorOptions),
-          ),
-          if (!properties.hasFlexFactor)
-            Text(
-              'unconstrained ${root.isMainAxisHorizontal ? 'horizontal' : 'vertical'}',
-              style: TextStyle(
-                color: ThemedColor(
-                  const Color(0xFFD08A29),
-                  Colors.orange.shade700,
-                ),
-                fontStyle: FontStyle.italic,
-              ),
-              maxLines: 2,
-              softWrap: true,
-              overflow: TextOverflow.ellipsis,
-              textScaleFactor: smallTextScaleFactor,
-              textAlign: TextAlign.center,
-            ),
-          _buildFlexFitChangerDropdown(),
-        ],
-      ),
+      child: content,
     );
+  }
+
+  /// Generate a short description of the node including children for cases
+  /// where all children fit on one line.
+  String _buildDescription() {
+    final chain = <String>[];
+    var node = summaryTreeNode.diagnostic;
+    while (node != null && chain.length < 2) {
+      chain.add(node.description);
+      final children = node.childrenNow;
+      if (children?.length != 1) break;
+      node = children.first;
+    }
+    if (chain.isEmpty) return properties.description;
+    return chain.join(' → ');
   }
 
   @override
@@ -1103,7 +1155,7 @@ class FlexChildVisualizer extends StatelessWidget {
             builder: buildEntranceAnimation,
             child: WidgetVisualizer(
               backgroundColor: backgroundColor,
-              title: properties.description,
+              title: _buildDescription(),
               borderColor: borderColor,
               textColor: textColor,
               overflowSide: properties.overflowSide,
@@ -1197,14 +1249,12 @@ class WidgetVisualizer extends StatelessWidget {
                           constraints: const BoxConstraints(
                               maxWidth: minRenderWidth *
                                   widgetTitleMaxWidthPercentage),
-                          child: Center(
-                            child: Text(
-                              title,
-                              style: textColor != null
-                                  ? TextStyle(color: textColor)
-                                  : null,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                          child: Text(
+                            title,
+                            style: textColor != null
+                                ? TextStyle(color: textColor)
+                                : null,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           decoration: BoxDecoration(color: borderColor),
                           padding: const EdgeInsets.all(4.0),

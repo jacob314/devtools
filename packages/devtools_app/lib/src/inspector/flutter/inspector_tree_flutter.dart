@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:collection';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -10,8 +11,10 @@ import 'package:pedantic/pedantic.dart';
 
 import '../../flutter/auto_dispose_mixin.dart';
 import '../../flutter/collapsible_mixin.dart';
+import '../../flutter/extent_delegate_list.dart';
 import '../../flutter/theme.dart';
 import '../../ui/colors.dart';
+import '../../utils.dart';
 import '../diagnostics_node.dart';
 import '../inspector_tree.dart';
 import 'diagnostics.dart';
@@ -63,6 +66,67 @@ class _InspectorTreeRowState extends State<_InspectorTreeRowWidget>
         widget.inspectorTreeState.controller.onExpandRow(row);
       } else {
         widget.inspectorTreeState.controller.onCollapseRow(row);
+      }
+    });
+  }
+
+  @override
+  bool shouldShow() => widget.node.shouldShow;
+}
+
+/// Presents a [TreeNode].
+class _AnimatedInspectorTreeRowWidget extends StatefulWidget {
+  /// Constructs a [_InspectorTreeRowWidget] that presents a line in the
+  /// Inspector tree.
+  const _AnimatedInspectorTreeRowWidget({
+    @required Key key,
+    @required this.row,
+    @required this.inspectorTreeState,
+    @required this.visibilityCurve,
+  }) : super(key: key);
+
+  final _InspectorTreeState inspectorTreeState;
+  final Animation<double> visibilityCurve;
+
+  InspectorTreeNode get node => row.node;
+  final AnimatedRow row;
+
+  @override
+  _AnimatedInspectorTreeRowState createState() =>
+      _AnimatedInspectorTreeRowState();
+}
+
+class _AnimatedInspectorTreeRowState
+    extends State<_AnimatedInspectorTreeRowWidget>
+    with TickerProviderStateMixin, CollapsibleAnimationMixin {
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedInspectorRowContent(
+      row: widget.row,
+      expandArrowAnimation: expandArrowAnimation,
+      controller: widget.inspectorTreeState.controller,
+      visibilityAnimation: widget.visibilityCurve,
+      onToggle: () {
+        setExpanded(!isExpanded);
+      },
+    );
+  }
+
+  @override
+  bool get isExpanded => widget.node.isExpanded;
+
+  @override
+  void onExpandChanged(bool expanded) {
+    setState(() {
+      final row = widget.row;
+      if (row.current == null) {
+        // Don't allow manipulating rows that are animating out.
+        return;
+      }
+      if (expanded) {
+        widget.inspectorTreeState.controller.onExpandRow(row.current);
+      } else {
+        widget.inspectorTreeState.controller.onCollapseRow(row.current);
       }
     });
   }
@@ -146,6 +210,13 @@ abstract class InspectorControllerClient {
   void scrollToRect(Rect rect);
 }
 
+class NodeYPair {
+  const NodeYPair(this.node, this.y);
+
+  final InspectorTreeNode node;
+  final double y;
+}
+
 class InspectorTree extends StatefulWidget {
   const InspectorTree({
     Key key,
@@ -167,6 +238,8 @@ class _InspectorTreeState extends State<InspectorTree>
         AutomaticKeepAliveClientMixin<InspectorTree>,
         AutoDisposeMixin
     implements InspectorControllerClient {
+  BoxConstraints _lastConstraints;
+
   InspectorTreeControllerFlutter get controller => widget.controller;
 
   bool get isSummaryTree => widget.isSummaryTree;
@@ -176,7 +249,12 @@ class _InspectorTreeState extends State<InspectorTree>
   Future<void> currentAnimateY;
   Rect currentAnimateTarget;
 
-  AnimationController constraintDisplayController;
+  AnimationController visibilityController;
+
+  /// A curved animation that matches [expandController], moving from 0.0 to 1.0
+  /// Useful for animating the size of a child that is appearing.
+  Animation<double> visibilityCurve;
+  FixedExtentDelegate extentDelegate;
 
   @override
   void initState() {
@@ -184,9 +262,32 @@ class _InspectorTreeState extends State<InspectorTree>
     _scrollControllerX = ScrollController();
     _scrollControllerY = ScrollController();
     _scrollControllerY.addListener(_onScrollYChange);
-    if (isSummaryTree) {
-      constraintDisplayController = longAnimationController(this);
-    }
+    visibilityController = longAnimationController(this);
+    visibilityCurve = defaultCurvedAnimation(visibilityController);
+    visibilityController.addStatusListener((status) {
+      setState(() {});
+      if (AnimationStatus.completed == status ||
+          AnimationStatus.dismissed == status) {
+        print("XX status done. TODO(jacobr): do somethign");
+        // nudge offset and switch to non-animating view.
+      }
+    });
+    extentDelegate = FixedExtentDelegate(computeExtent: (index) {
+      if (controller?.animatedRows == null) return 0;
+      if (index == 0) {
+        return topAnimation?.value ?? 0;
+      }
+      if (index == controller.animatedRows.length + 1) {
+        return bottomAnimation?.value ?? 0.0;
+      }
+      return controller.animatedRows[index - 1]
+          .animatedRowHeight(visibilityCurve);
+    }, computeLength: () {
+      final rows = controller?.animatedRows;
+      if (rows == null) return 0;
+      return rows.length + 2;
+    });
+    visibilityController.addListener(extentDelegate.recompute);
     _bindToController();
   }
 
@@ -208,7 +309,7 @@ class _InspectorTreeState extends State<InspectorTree>
     controller?.client = null;
     _scrollControllerX.dispose();
     _scrollControllerY.dispose();
-    constraintDisplayController?.dispose();
+    visibilityController?.dispose();
   }
 
   void _onScrollYChange() {
@@ -261,11 +362,15 @@ class _InspectorTreeState extends State<InspectorTree>
       return minOffset;
     }
 
+    // If there is no target offset, use zero.
+    if (minOffset == double.infinity) return 0;
+
     return minOffset;
   }
 
   @override
   Future<void> scrollToRect(Rect rect) async {
+    // TODO(jacobr): this probably needs to be reworked.
     if (rect == currentAnimateTarget) {
       // We are in the middle of an animation to this exact rectangle.
       return;
@@ -276,6 +381,8 @@ class _InspectorTreeState extends State<InspectorTree>
       rect.top,
       rect.bottom,
     );
+    assert(targetY != double.infinity);
+
     currentAnimateY = _scrollControllerY.animateTo(
       targetY,
       duration: longDuration,
@@ -286,6 +393,7 @@ class _InspectorTreeState extends State<InspectorTree>
     // we will end up as so we get a smooth animation to the final destination.
     final targetX = _computeTargetX(targetY);
 
+    assert(targetX != double.infinity);
     unawaited(_scrollControllerX.animateTo(
       targetX,
       duration: longDuration,
@@ -307,6 +415,7 @@ class _InspectorTreeState extends State<InspectorTree>
     double minOffset,
     double maxOffset,
   ) {
+    // Probably needs to be reworked.
     final currentOffset = controller.offset;
     final viewportDimension = _scrollControllerY.position.viewportDimension;
     final currentEndOffset = viewportDimension + currentOffset;
@@ -333,8 +442,205 @@ class _InspectorTreeState extends State<InspectorTree>
     controller?.client = this;
   }
 
+  List<AnimatedRow> _currentAnimatedRows;
+  Tween<double> topTween;
+  Tween<double> bottomTween;
+  Animation<double> topAnimation;
+  Animation<double> bottomAnimation;
+
+  int get countSpacerAnimations {
+    int count = 0;
+    if (topAnimation != null) count++;
+    if (bottomAnimation != null) count++;
+    return count;
+  }
+
   @override
   void onChanged() {
+    if (_currentAnimatedRows != controller.animatedRows) {
+      final lastAnimatedRows = _currentAnimatedRows;
+
+      double viewHeight = 1000.0; // Arbitrary. We could let it be zero.
+      if (_lastConstraints != null) {
+        viewHeight = _lastConstraints.maxHeight;
+      }
+
+      final lastTopSpacerHeight = topAnimation?.value ?? 0;
+      double y = lastTopSpacerHeight;
+
+      final scrollY = _scrollControllerY.offset;
+      final Map<InspectorTreeNode, double> visibleNodeOffsets =
+          LinkedHashMap.identity();
+
+      final selection = controller.selection;
+      // Determine where relevant nodes were in the previous animation.
+      if (lastAnimatedRows != null) {
+        for (final row in lastAnimatedRows) {
+          final height = row.animatedRowHeight(visibilityCurve);
+          // We are only interested in nodes that are still relevant for the
+          // new animation which means only nodes from the end of the previous
+          // animation.
+          final node = row.current?.node;
+          if (node != null) {
+            if (y + height >= scrollY && y <= scrollY + viewHeight) {
+              visibleNodeOffsets[node] = y;
+            }
+          }
+          y += height;
+        }
+      }
+
+      InspectorTreeNode fixedPointNode;
+      if (selection != null && visibleNodeOffsets.containsKey(selection)) {
+        fixedPointNode = selection;
+      }
+      if (fixedPointNode == null && _currentAnimatedRows != null) {
+        for (var row in _currentAnimatedRows) {
+          final node = row.current?.node;
+          if (node != null && visibleNodeOffsets.containsKey(node)) {
+            fixedPointNode = node;
+            break;
+          }
+        }
+      }
+
+      InspectorTreeNode firstVisible;
+      InspectorTreeNode lastVisible;
+      if (fixedPointNode != null &&
+          visibleNodeOffsets.containsKey(fixedPointNode)) {
+        final fixedPointY = visibleNodeOffsets[fixedPointNode];
+        final double fixedPointYOffset =
+            fixedPointY - _scrollControllerY.offset;
+        print("XXX fixedPointYOffset: $fixedPointYOffset");
+        final nextAnimatedRows = controller.animatedRows;
+        for (int i = 0; i < nextAnimatedRows.length; ++i) {
+          final row = nextAnimatedRows[i];
+          final currentNode = row.current?.node;
+          if (currentNode == fixedPointNode) {
+            {
+              var offsetY = fixedPointYOffset;
+              // Find first visible.
+              for (int j = i; j >= 0; j--) {
+                final r = nextAnimatedRows[j];
+                final node = r.current?.node;
+                if (node != null) {
+                  firstVisible = node;
+                }
+                if (offsetY < 0) break;
+                offsetY -= r.endHeight;
+              }
+            }
+            {
+              var offsetY = fixedPointYOffset;
+              // Find last visible.
+              for (int j = i; j < nextAnimatedRows.length; j++) {
+                final r = nextAnimatedRows[j];
+                final node = r.current?.node;
+                if (node != null) {
+                  lastVisible = node;
+                }
+                if (offsetY >= viewHeight) break;
+                offsetY += r.endHeight;
+              }
+            }
+            break;
+          }
+        }
+      }
+
+      controller.optimizeRowAnimation(
+          lastVisibleRange: VisibleRange(
+            visibleNodeOffsets.keys.safeFirst,
+            visibleNodeOffsets.keys.safeLast,
+          ),
+          currentVisibleRange: VisibleRange(
+            firstVisible,
+            lastVisible,
+          ));
+      _currentAnimatedRows = controller.animatedRows;
+
+      double beginY = 0;
+      double endY = 0;
+
+      double targetDelta;
+      double nextFixedPointY;
+      for (int i = 0; i < _currentAnimatedRows.length; ++i) {
+        final row = _currentAnimatedRows[i];
+        final currentNode = row.current?.node;
+        if (currentNode != null && currentNode == fixedPointNode) {
+          // We are only interested in nodes that are still relevant for the
+          // new animation which means only nodes from the end of the previous
+          // animation
+          targetDelta = endY - beginY;
+          nextFixedPointY = beginY;
+        }
+        beginY += row.beginHeight;
+        endY += row.endHeight;
+      }
+
+      double targetOffset;
+      if (targetDelta != null) {
+        if (targetDelta > 0) {
+          topTween = Tween(begin: targetDelta, end: 0);
+        } else {
+          topTween = Tween(begin: 0, end: -targetDelta);
+        }
+        final fixedPointY = visibleNodeOffsets[fixedPointNode];
+        if (fixedPointY != null && nextFixedPointY != null) {
+          final fixedPointDelta =
+              (nextFixedPointY + topTween.begin) - fixedPointY;
+          targetOffset = _scrollControllerY.offset + fixedPointDelta;
+          if (targetOffset < 0) {
+            topTween = Tween(
+                begin: topTween.begin - targetOffset,
+                end: topTween.end - targetOffset);
+            targetOffset = 0;
+          }
+        }
+        topAnimation = topTween.animate(visibilityCurve);
+      } else {
+        topTween = null;
+        topAnimation = null;
+      }
+
+      // XXX not right?
+      final lengthDelta = endY - beginY;
+      if (lengthDelta > 0) {
+        bottomTween = Tween(begin: lengthDelta, end: 0);
+      } else {
+        bottomTween = Tween(begin: 0, end: -lengthDelta);
+      }
+      // TODO(jacobr): grow the bottom tween to make room for scrolls to the bottom of the list?
+      bottomAnimation = bottomTween.animate(visibilityCurve);
+
+      if (visibilityController.value != 1.0) {
+        // There is an old animation in progress.
+        // We could handle this case better with more complexity in how we run
+        // animations. Instead, we assume this case is rare and just handle the
+        // simple case where the only time multiple animations are triggered in
+        // close enough succession for this to be a problem is when the second
+        // animation is undoing the first animation.
+
+        // This logic assumes a symmetric animation curve. Basically we snap closer
+        visibilityController.value = 1 - visibilityController.value;
+        // we could just completely cancel the old animation but this logic
+      } else {
+        // The previous animation was done. We can run the new animation without
+        // concern that the combination of the intermediate state of the
+        // previous animation and
+        // the current
+        visibilityController.reset();
+      }
+      visibilityController.animateTo(1, duration: longDuration);
+
+      // TODO(jacobr): more gracefully handle existing animations by
+      // tracking what the current animation value was.
+      if (targetOffset != null &&
+          (targetOffset - _scrollControllerY.offset).abs() >= 0.001) {
+        print("XXX JUMPED TO $targetOffset from ${_scrollControllerY.offset}");
+        _scrollControllerY.jumpTo(targetOffset);
+      }
+    }
     setState(() {});
   }
 
@@ -345,43 +651,84 @@ class _InspectorTreeState extends State<InspectorTree>
       // Indicate the tree is loading.
       return const Center(child: CircularProgressIndicator());
     }
-
-    return Scrollbar(
+    final child = Scrollbar(
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         controller: _scrollControllerX,
         child: SizedBox(
           width: controller.rowWidth + controller.maxRowIndent,
-          child: Scrollbar(
-            child: ListView.custom(
-              itemExtent: rowHeight,
-              childrenDelegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final InspectorTreeRow row = controller.root?.getRow(index);
+          child: ExtentDelegateListView(
+            extentDelegate: extentDelegate,
+            childrenDelegate: SliverChildBuilderDelegate(
+              (context, index) {
+                if (index == 0 || index == controller.animatedRowsLength + 1) {
+                  return const SizedBox();
+                }
+                final row = controller.getAnimatedRow(index - 1);
+                if (row == null) return const SizedBox();
+                if (!row.animateRow) {
                   return _InspectorTreeRowWidget(
                     key: PageStorageKey(row?.node),
                     inspectorTreeState: this,
-                    row: row,
+                    row: row.targetRow,
                   );
-                },
-                childCount: controller.numRows,
-              ),
-              controller: _scrollControllerY,
+                }
+                return _AnimatedInspectorTreeRowWidget(
+                  key: PageStorageKey(row?.node),
+                  inspectorTreeState: this,
+                  row: row,
+                  visibilityCurve: visibilityCurve,
+                );
+              },
+              childCount: controller.animatedRowsLength + countSpacerAnimations,
             ),
+            controller: _scrollControllerY,
           ),
         ),
       ),
     );
+    return LayoutBuilder(builder: (context, constraints) {
+      _lastConstraints = constraints;
+      return child;
+    });
   }
 
   @override
   bool get wantKeepAlive => true;
 }
 
-final _defaultPaint = Paint()
-// TODO(kenz): try to use color from Theme.of(context) for treeGuidelineColor
-  ..color = treeGuidelineColor
-  ..strokeWidth = chartLineStrokeWidth;
+class AnimatedSpacer extends StatelessWidget {
+  const AnimatedSpacer({
+    Key key,
+    @required this.animation,
+    this.visibilityCurve,
+  }) : super(key: key);
+
+  final Animation<double> animation;
+  final Animation<double> visibilityCurve;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: visibilityCurve,
+      builder: (_, __) {
+        if (animation == null) {
+          return const SizedBox();
+        }
+        return SizedBox(height: animation.value);
+      },
+    );
+  }
+}
+
+Paint _paintWithOpacity(double opacity) {
+  return Paint()
+    // TODO(kenz): try to use color from Theme.of(context) for treeGuidelineColor
+    ..color = treeGuidelineColor.withOpacity(opacity)
+    ..strokeWidth = chartLineStrokeWidth;
+}
+
+final _defaultPaint = _paintWithOpacity(1.0);
 
 /// Custom painter that draws lines indicating how parent and child rows are
 /// connected to each other.
@@ -423,11 +770,13 @@ class _RowPainter extends CustomPainter {
       final paint = _defaultPaint;
       currentX = _controller.getDepthIndent(row.depth - 1) - columnWidth * 0.5;
       final double width = showExpandCollapse ? columnWidth * 0.5 : columnWidth;
-      canvas.drawLine(
-        Offset(currentX, 0.0),
-        Offset(currentX, rowHeight * 0.5),
-        paint,
-      );
+      if (row.ticks.isEmpty || row.ticks.last != row.depth - 1) {
+        canvas.drawLine(
+          Offset(currentX, 0.0),
+          Offset(currentX, rowHeight * 0.5),
+          paint,
+        );
+      }
       canvas.drawLine(
         Offset(currentX, rowHeight * 0.5),
         Offset(currentX + width, rowHeight * 0.5),
@@ -440,6 +789,79 @@ class _RowPainter extends CustomPainter {
   bool shouldRepaint(CustomPainter oldDelegate) {
     // TODO(jacobr): check whether the row has different ticks.
     return false;
+  }
+}
+
+/// Custom painter that draws lines indicating how parent and child rows are
+/// connected to each other.
+///
+/// Each rows object contains a list of ticks that indicate the x coordinates of
+/// vertical lines connecting other rows need to be drawn within the vertical
+/// area of the current row. This approach has the advantage that a row contains
+/// all information required to render all content within it but has the
+/// disadvantage that the x coordinates of each line connecting rows must be
+/// computed in advance.
+class _AnimatedRowPainter extends CustomPainter {
+  _AnimatedRowPainter(this.row, this._controller, this.visibilityAnimation);
+
+  final InspectorTreeController _controller;
+  final AnimatedRow row;
+  final Animation<double> visibilityAnimation;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    double currentX = 0;
+
+    if (this.row == null) {
+      return;
+    }
+    final InspectorTreeNode node = this.row.node;
+    final bool showExpandCollapse = node.showExpandCollapse;
+
+    final rowHeight = this.row.animatedRowHeight(visibilityAnimation);
+    for (var tick in this.row.ticks) {
+      currentX = _controller.getDepthIndent(tick.depth(visibilityAnimation)) -
+          columnWidth * 0.5;
+      final opacity = tick.opacity(visibilityAnimation);
+      // Draw a vertical line for each tick identifying a connection between
+      // an ancestor of this node and some other node in the tree.
+      if (opacity > 0) {
+        canvas.drawLine(
+          Offset(currentX, 0.0),
+          Offset(currentX, rowHeight),
+          opacity == 1.0 ? _defaultPaint : _paintWithOpacity(opacity),
+        );
+      }
+    }
+
+    // If this row is itself connected to a parent then draw the L shaped line
+    // to make that connection.
+    if (row.lineToParent != null) {
+      final paint = _defaultPaint;
+      currentX = _controller
+              .getDepthIndent(row.lineToParent.depth(visibilityAnimation)) -
+          columnWidth * 0.5;
+      final double width = showExpandCollapse ? columnWidth * 0.5 : columnWidth;
+      // XX add back if (row.ticks.isEmpty || row.ticks.last != row.depth - 1)
+      {
+        canvas.drawLine(
+          Offset(currentX, 0.0),
+          Offset(currentX, rowHeight * 0.5),
+          paint,
+        );
+      }
+      canvas.drawLine(
+        Offset(currentX, rowHeight * 0.5),
+        Offset(currentX + width, rowHeight * 0.5),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) {
+    // TODO(jacobr): check whether the row has different ticks.
+    return true;
   }
 }
 
@@ -522,6 +944,102 @@ class InspectorRowContent extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Widget defining the contents of a single row in the InspectorTree.
+///
+/// This class defines the scaffolding around the rendering of the actual
+/// content of a [RemoteDiagnosticsNode] provided by
+/// [DiagnosticsNodeDescription] to provide a tree implementation with lines
+/// drawn between parent and child nodes when nodes have multiple children.
+///
+/// Changes to how the actual content of the node within the row should
+/// be implemented by changing [DiagnosticsNodeDescription] instead.
+class AnimatedInspectorRowContent extends StatelessWidget {
+  const AnimatedInspectorRowContent({
+    @required this.row,
+    @required this.controller,
+    @required this.onToggle,
+    @required this.expandArrowAnimation,
+    @required this.visibilityAnimation,
+  });
+
+  final AnimatedRow row;
+  final InspectorTreeControllerFlutter controller;
+  final VoidCallback onToggle;
+  final Animation<double> expandArrowAnimation;
+  final Animation<double> visibilityAnimation;
+
+  @override
+  Widget build(BuildContext context) {
+    final double currentX =
+        controller.getDepthIndent(row.depth(visibilityAnimation)) - columnWidth;
+
+    if (row == null) {
+      return const SizedBox();
+    }
+    Color backgroundColor;
+    if (row.targetRow.isSelected || row.node == controller.hover) {
+      backgroundColor =
+          row.isSelected ? selectedRowBackgroundColor : hoverColor;
+    }
+
+    final node = row.node;
+    final childSmall = CustomPaint(
+        painter: _AnimatedRowPainter(row, controller, visibilityAnimation),
+        size: Size(currentX, rowHeight));
+    final childFull = CustomPaint(
+      painter: _AnimatedRowPainter(row, controller, visibilityAnimation),
+      size: Size(currentX, rowHeight),
+      child: Padding(
+        padding: EdgeInsets.only(left: currentX),
+        child: ClipRect(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              node.showExpandCollapse
+                  ? InkWell(
+                      onTap: onToggle,
+                      child: RotationTransition(
+                        turns: expandArrowAnimation,
+                        child: const Icon(
+                          Icons.expand_more,
+                          size: 16.0,
+                        ),
+                      ),
+                    )
+                  : const SizedBox(width: 16.0, height: 16.0),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: backgroundColor,
+                ),
+                child: InkWell(
+                  onTap: () {
+                    controller.onSelectRow(row.targetRow);
+                  },
+                  child: Container(
+                    height: rowHeight,
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                    child: DiagnosticsNodeDescription(node.diagnostic),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return AnimatedBuilder(
+      animation: visibilityAnimation,
+      builder: (context, child) {
+        return (row.animatedRowHeight(visibilityAnimation) > 4)
+            ? childFull
+            : childSmall;
+      },
     );
   }
 }

@@ -53,6 +53,7 @@ import 'dart:ui' as ui
         Vertices;
 import 'dart:ui' show Canvas, Offset;
 
+import 'package:devtools_app/src/ui/fake_flutter/_real_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/rendering.dart';
@@ -78,6 +79,10 @@ extension WidgetInspectorServicePrivateMethods on WidgetInspectorService {
   }
 
   String _safeJsonEncode(Object object) {
+    throw 'Dummy extension method to make the code type check when it calls private members';
+  }
+
+  List<String> get _pubRootDirectories {
     throw 'Dummy extension method to make the code type check when it calls private members';
   }
 }
@@ -230,6 +235,13 @@ String addServiceExtensions() {
     return Future.value(<String, Object>{'result': succeed});
   }
 
+  Future<Map<String, dynamic>> getPubRootDirectories(
+      Map<String, String> parameters) {
+    return Future.value(<String, Object>{
+      'result': WidgetInspectorService.instance._pubRootDirectories,
+    });
+  }
+
   final failures = <String, String>{};
   void registerHelper(String name, ServiceExtensionCallback callback) {
     try {
@@ -249,6 +261,7 @@ String addServiceExtensions() {
   registerHelper('setFlexFit', setFlexFit);
   registerHelper('setFlexFactor', setFlexFactor);
   registerHelper('setFlexProperties', setFlexProperties);
+  registerHelper('getPubRootDirectories', getPubRootDirectories);
   return failures.isNotEmpty
       ? WidgetInspectorService.instance._safeJsonEncode(failures)
       : null;
