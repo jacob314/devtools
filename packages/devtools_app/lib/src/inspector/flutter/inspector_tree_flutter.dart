@@ -4,6 +4,7 @@
 
 import 'dart:math';
 
+import 'package:devtools_app/src/utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pedantic/pedantic.dart';
@@ -38,12 +39,6 @@ class _InspectorTreeRowWidget extends StatefulWidget {
 
 class _InspectorTreeRowState extends State<_InspectorTreeRowWidget>
     with TickerProviderStateMixin, CollapsibleAnimationMixin {
-
-  @override
-  void didUpdateWidget(Widget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-  }
-
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -160,14 +155,9 @@ class _InspectorTreeState extends State<InspectorTree>
         AutomaticKeepAliveClientMixin<InspectorTree>,
         AutoDisposeMixin
     implements InspectorControllerClient {
-<<<<<<< HEAD
-=======
-  final defaultAnimationDuration = const Duration(milliseconds: 500);
-  final slowAnimationDuration = const Duration(milliseconds: 1000);
 
   ItemPositionsListener _itemPositionsListener;
 
->>>>>>> Checkpoint of better scrolling animated inspector tree.
   InspectorTreeControllerFlutter get controller => widget.controller;
 
   bool get isSummaryTree => widget.isSummaryTree;
@@ -189,6 +179,7 @@ class _InspectorTreeState extends State<InspectorTree>
     if (isSummaryTree) {
       constraintDisplayController = longAnimationController(this);
     }
+    _itemPositionsListener.itemPositions.addListener(_onScrollYChange);
     _bindToController();
   }
 
@@ -259,58 +250,28 @@ class _InspectorTreeState extends State<InspectorTree>
     return minOffset;
   }
 
+
   @override
-<<<<<<< HEAD
-  Future<void> scrollToRect(Rect rect) async {
-    if (rect == currentAnimateTarget) {
-      // We are in the middle of an animation to this exact rectangle.
-      return;
-    }
-    currentAnimateTarget = rect;
-    final targetY = _computeTargetOffsetY(
-      _scrollControllerY,
-      rect.top,
-      rect.bottom,
-    );
-    currentAnimateY = _scrollControllerY.animateTo(
-      targetY,
-      duration: longDuration,
-      curve: defaultCurve,
-    );
-
-    // Determine a target X coordinate consistent with the target Y coordinate
-    // we will end up as so we get a smooth animation to the final destination.
-    final targetX = _computeTargetX(targetY);
-
-    unawaited(_scrollControllerX.animateTo(
-      targetX,
-      duration: longDuration,
-      curve: defaultCurve,
-    ));
-
-    try {
-      await currentAnimateY;
-    } catch (e) {
-      // Doesn't matter if the animation was cancelled.
-=======
   void animateToTargets(List<InspectorTreeNode> targets) {
-    Set<InspectorTreeNode> visible = Set.identity();
+    final Set<InspectorTreeNode> visible = Set.identity();
 
     for (var position in _itemPositionsListener.itemPositions.value) {
       final row = controller.getCachedRow(position.index);
-      if (position.itemLeadingEdge >= 0 && position.itemTrailingEdge <= 1)
-      if (row != null && row.node != null) {
-        visible.add(row.node);
+      if (position.itemLeadingEdge >= 0 && position.itemTrailingEdge <= 1) {
+        if (row != null && row.node != null) {
+          visible.add(row.node);
+        }
       }
->>>>>>> Checkpoint of better scrolling animated inspector tree.
     }
 
+    int firstIndex = maxJsInt;
     for (var target in targets) {
       if (!visible.contains(target)) {
-        // TODO(jacobr): be smarter about scrolling only as much as needed.
-        _scrollControllerY.scrollTo(index: controller.getRowForNode(targets.first).index, duration: slowAnimationDuration);
-        return;
+        firstIndex = min(firstIndex, controller.getRowForNode(target).index);
       }
+    }
+    if (firstIndex != maxJsInt) {
+      _scrollControllerY.scrollTo(index: firstIndex, duration: longDuration);
     }
   }
 

@@ -204,7 +204,8 @@ class InspectorService extends DisposableController
     final directory = await inferPubRootDirectoryIfNeededHelper();
     List<String> directories;
     if (directory == null) {
-      directories = await getPubRootDirectories();
+      directories = [];
+       // XXX directories = await getPubRootDirectories();
     } else {
       directories = [directory];
     }
