@@ -363,6 +363,10 @@ class InspectorController extends DisposableController
     maybeLoadUI();
   }
 
+  List<String> _rootDirectories;
+  List<String> get rootDirectories =>
+      _rootDirectories ?? parent.rootDirectories;
+
   Future<void> maybeLoadUI() async {
     if (!visibleToUser || !isActive) {
       return;
@@ -371,7 +375,10 @@ class InspectorController extends DisposableController
     if (flutterAppFrameReady) {
       // We need to start by querying the inspector service to find out the
       // current state of the UI.
-      await inspectorService.inferPubRootDirectoryIfNeeded();
+      if (parent == null) {
+        _rootDirectories =
+            await inspectorService.inferPubRootDirectoryIfNeeded();
+      }
       await updateSelectionFromService(firstFrame: true);
     } else {
       final ready = await inspectorService.isWidgetTreeReady();

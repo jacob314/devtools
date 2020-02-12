@@ -175,7 +175,7 @@ const defaultDuration = Duration(milliseconds: 200);
 /// A long duration to use for animations.
 ///
 /// Use this rarely, only when you want added emphasis to an animation.
-const longDuration = Duration(milliseconds: 400);
+const longDuration = Duration(milliseconds: 3000);
 
 /// Builds a [defaultDuration] animation controller.
 ///
@@ -206,6 +206,9 @@ AnimationController longAnimationController(
 }
 
 /// The default curve we use for animations.
+///
+/// Inspector animations benefit from a symmetric animation curve which makes
+/// it easier to
 const defaultCurve = Curves.easeInOutCubic;
 
 /// Builds a [CurvedAnimation] with [defaultCurve].

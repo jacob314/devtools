@@ -1,12 +1,11 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 
-import '../globals.dart';
 import 'diagnostics_node.dart';
 import 'inspector_service.dart';
-import 'inspector_service_polyfill.dart';
 
+// TODO(jacobr): merge these into inspector_service once the dart:html
+// version of the app is removed.
 extension InspectorFlutterService on ObjectGroup {
   Future<void> invokeSetFlexProperties(
     InspectorInstanceRef ref,
@@ -60,32 +59,4 @@ extension InspectorFlutterService on ObjectGroup {
       },
     ));
   }
-
-  Future<Object> invokeServiceExtensionMethod(
-    RegistrableServiceExtension extension,
-    Map<String, String> parameters,
-  ) async {
-    final name = extension.name;
-    if (!serviceManager.serviceExtensionManager
-        .isServiceExtensionAvailable('ext.flutter.inspector.$name')) {
-      await invokeInspectorPolyfill(this);
-    }
-    return invokeServiceMethodDaemonParams(name, parameters);
-  }
-}
-
-class RegistrableServiceExtension {
-  RegistrableServiceExtension({
-    @required this.name,
-  });
-
-  final String name;
-
-  static final getLayoutExplorerNode =
-      RegistrableServiceExtension(name: 'getLayoutExplorerNode');
-  static final setFlexFit = RegistrableServiceExtension(name: 'setFlexFit');
-  static final setFlexFactor =
-      RegistrableServiceExtension(name: 'setFlexFactor');
-  static final setFlexProperties =
-      RegistrableServiceExtension(name: 'setFlexProperties');
 }
