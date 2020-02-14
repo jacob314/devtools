@@ -8,14 +8,10 @@ To introduce a Material widget, you can either directly include one, or use a wi
 ▼The ancestors of this widget were: 
 ├─▶Column
 ├─▶ExampleWidget
-├─▶MaterialApp
-├─MissingMaterialError
-├─▶MaterialApp
-├─MyApp
+├─▶Semantics
+├─Builder
+├─▶RepaintBoundary-[GlobalKey#<NUMBER>]
 └─...
-
-▼The relevant error-causing widget was: 
-<STACK_TRACE_LINE>
 
 ▼When the exception was thrown, this was the stack: 
 <STACK_TRACE_LINE>
