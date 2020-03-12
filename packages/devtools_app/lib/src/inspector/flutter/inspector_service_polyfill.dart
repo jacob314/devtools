@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../inspector_service.dart';
@@ -42,5 +44,18 @@ $script''',
 
   final expression = '((){${filteredLines.join()}})()';
 
-  await group.inspectorLibrary.eval(expression, isAlive: group);
+  final result = await group.inspectorLibrary.eval(expression, isAlive: group);
+  var encodedError;
+  if (result.valueAsStringIsTruncated) {
+    encodedError = await group.inspectorLibrary.service.getObject(group.inspectorLibrary.isolateId, result.id,
+        offset: 0, count: result.length);
+  } else {
+    encodedError = result.valueAsString;
+  }
+  Map<String, Object> decodedError = json.decode(encodedError);
+  if (decodedError != null) {
+    for (String name in decodedError.keys) {
+      print("");
+    }
+  }
 }
