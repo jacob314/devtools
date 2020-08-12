@@ -36,6 +36,7 @@ extension InspectorColorScheme on ColorScheme {
   Color get selectedRowBackgroundColor => isLight
       ? const Color.fromARGB(255, 202, 191, 69)
       : const Color.fromARGB(255, 99, 101, 103);
+
   Color get hoverColor =>
       isLight ? Colors.yellowAccent : const Color.fromARGB(255, 70, 73, 76);
 }
@@ -440,7 +441,9 @@ class AnimatedRow {
   final bool snapAnimationToEnd;
 
   AnimatedOffset _lineToParent;
+
   AnimatedOffset get lineToParent => _lineToParent;
+
   bool get hasLineToParent => lineToParent != null;
 
   void computeState(
@@ -587,6 +590,7 @@ class AnimatedRow {
   }
 
   double get beginHeight => last != null ? rowHeight : 0;
+
   double get endHeight => current != null ? rowHeight : 0;
 }
 
@@ -811,11 +815,11 @@ abstract class InspectorTreeController {
       }
     }
     _animatedRows = simplifiedRows;
+    final lastTreeMetrics = TreeMetrics(_oldRowMap);
+    final currentTreeMetrics = TreeMetrics(_rowMap);
+
     for (var row in animatedRows) {
-      row.computeState(
-        TreeMetrics(_oldRowMap),
-        TreeMetrics(_rowMap),
-      );
+      row.computeState(lastTreeMetrics, currentTreeMetrics);
     }
   }
 

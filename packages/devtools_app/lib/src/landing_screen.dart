@@ -34,6 +34,8 @@ class _LandingScreenBodyState extends State<LandingScreenBody> {
   void initState() {
     super.initState();
     connectDialogController = TextEditingController();
+    connectDialogController.text =
+        "http://127.0.0.1:62004/GnCOA2j7PfQ=/"; // XXX
   }
 
   @override

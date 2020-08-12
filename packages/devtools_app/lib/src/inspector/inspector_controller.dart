@@ -49,10 +49,13 @@ TextStyle textStyleForLevel(DiagnosticLevel level, ColorScheme colorScheme) {
   }
 }
 
+class InspectorSettingsController {
+  final ValueNotifier<bool> showOnlyUserCreated = ValueNotifier(false);
+//  final ValueNotifier<bool> expandSelectedBuildMethod = ValueNotifier(true);
+}
+
 /// This class is based on the InspectorPanel class from the Flutter IntelliJ
 /// plugin with some refactors to make it more of a true controller than a view.
-///
-/// No changes to this class are allowed to pull in dependencies on dart:html.
 class InspectorController extends DisposableController
     with AutoDisposeControllerMixin
     implements InspectorServiceClient {
@@ -65,6 +68,7 @@ class InspectorController extends DisposableController
     this.isSummaryTree = true,
     this.onExpandCollapseSupported,
     this.onLayoutExplorerSupported,
+    @required this.inspectorSettingsController,
   })  : _treeGroups = InspectorObjectGroupManager(inspectorService, 'tree'),
         _selectionGroups =
             InspectorObjectGroupManager(inspectorService, 'selection') {
@@ -133,6 +137,7 @@ class InspectorController extends DisposableController
     }
   }
 
+  final InspectorSettingsController inspectorSettingsController;
   final List<VoidCallback> _selectionListeners = [];
 
   void addSelectionListener(VoidCallback listener) {

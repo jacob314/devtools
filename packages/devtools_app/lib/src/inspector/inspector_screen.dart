@@ -178,9 +178,26 @@ class _InspectorScreenBodyState extends State<InspectorScreenBody>
         minIncludeTextWidth: 1250,
         extensions: [extensions.repaintRainbow, extensions.debugAllowBanner],
       ),
+      const SizedBox(width: denseSpacing),
+      const SizedBox(width: denseSpacing),
+      Tooltip(
+        message: 'Filter',
+        child: OutlineButton(
+          onPressed: _filter,
+          child: createIcon(Icons.filter_list),
+        ),
+      ),
       // TODO(jacobr): implement TogglePlatformSelector.
       //  TogglePlatformSelector().selector
     ];
+  }
+
+  void _filter() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) =>
+          InspectorFilterDialog(inspectorController),
+    );
   }
 
   Widget _expandCollapseButtons() {
@@ -250,6 +267,7 @@ class _InspectorScreenBodyState extends State<InspectorScreenBody>
 
     setState(() {
       inspectorController?.dispose();
+      // TODO(jacobr): switch to using provider.
       summaryTreeController = InspectorTreeControllerFlutter();
       detailsTreeController = InspectorTreeControllerFlutter();
       inspectorController = InspectorController(
