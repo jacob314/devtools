@@ -78,6 +78,17 @@ class RemoteDiagnosticsNode extends DiagnosticableTree {
 
   Map<String, Object> get size => json['size'];
 
+  bool _isLocalClass;
+
+  bool get isLocalClass {
+    final objectGroup = inspectorService;
+    if (objectGroup is ObjectGroup) {
+      return _isLocalClass ??= objectGroup.inspectorService.isLocalClass(this);
+    } else {
+      return false;
+    }
+  }
+
   @override
   bool operator ==(dynamic other) {
     if (other is! RemoteDiagnosticsNode) return false;
@@ -411,7 +422,7 @@ class RemoteDiagnosticsNode extends DiagnosticableTree {
 
   Map<String, Object> get valuePropertiesJson => json['valueProperties'];
 
-  bool get hasChildren {
+  bool get maybeHasChildren {
     // In the summary tree, json['hasChildren']==true when the node has details
     // tree children so we need to first check whether the list of children for
     // the node in the tree was specified. If there is an empty list of children
@@ -439,12 +450,15 @@ class RemoteDiagnosticsNode extends DiagnosticableTree {
 
   /// Check whether children are already available.
   bool get childrenReady {
-    return json.containsKey('children') || _children != null || !hasChildren;
+    return json.containsKey('children') ||
+        _children != null ||
+        !maybeHasChildren;
   }
 
-  Future<List<RemoteDiagnosticsNode>> get children {
-    _computeChildren();
-    return _childrenFuture;
+  Future<List<RemoteDiagnosticsNode>> get children async {
+    await _computeChildren();
+    if (_children != null) return _children;
+    return await _childrenFuture;
   }
 
   List<RemoteDiagnosticsNode> get childrenNow {
@@ -452,9 +466,11 @@ class RemoteDiagnosticsNode extends DiagnosticableTree {
     return _children;
   }
 
+  bool get childrenAvailableNow => !maybeHasChildren || _children != null;
+
   Future<void> _computeChildren() async {
     _maybePopulateChildren();
-    if (!hasChildren || _children != null) {
+    if (childrenAvailableNow) {
       return;
     }
 
@@ -480,7 +496,7 @@ class RemoteDiagnosticsNode extends DiagnosticableTree {
   }
 
   void _maybePopulateChildren() {
-    if (!hasChildren || _children != null) {
+    if (!maybeHasChildren || _children != null) {
       return;
     }
 
