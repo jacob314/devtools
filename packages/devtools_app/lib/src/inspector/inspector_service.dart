@@ -10,6 +10,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
+
 import 'package:meta/meta.dart';
 import 'package:vm_service/vm_service.dart';
 
@@ -17,6 +21,7 @@ import '../auto_dispose.dart';
 import '../eval_on_dart_library.dart';
 import '../globals.dart';
 import 'diagnostics_node.dart';
+import 'inspector_service_polyfill.dart';
 
 // TODO(jacobr): remove flutter_web entry once flutter_web and flutter are
 // unified.
@@ -35,6 +40,23 @@ Future<void> ensureInspectorServiceDependencies() async {
   // TODO(jacobr): consider also loading common icons needed by the inspector
   // to avoid flicker on icon load.
   _inspectorDependenciesLoaded = true;
+}
+
+class RegistrableServiceExtension {
+  const RegistrableServiceExtension(this.name);
+
+  final String name;
+
+  // Layout explorer service extensions.
+  static const getLayoutExplorerNode =
+      RegistrableServiceExtension('getLayoutExplorerNode');
+  static const setFlexFit = RegistrableServiceExtension('setFlexFit');
+  static const setFlexFactor = RegistrableServiceExtension('setFlexFactor');
+  static const setFlexProperties =
+      RegistrableServiceExtension('setFlexProperties');
+
+  static const getPubRootDirectories =
+      RegistrableServiceExtension('getPubRootDirectories');
 }
 
 /// Manages communication between inspector code running in the Flutter app and
@@ -179,11 +201,105 @@ class InspectorService extends DisposableController
     return false;
   }
 
+  ValueListenable<List<String>> get rootDirectories => _rootDirectories;
+  final ValueNotifier<List<String>> _rootDirectories = ValueNotifier([]);
+
+  Set<String> _rootPackages;
+  List<String> _rootPackagePrefixes;
+
+  Future<void> onRootDirectoriesChanged(List<String> directories) async {
+    _rootDirectories.value = directories;
+    _rootPackages = {};
+    _rootPackagePrefixes = [];
+    for (var directory in directories) {
+      // TODO(jacobr): add an API to DDS to provide the actual mapping to and
+      // from absolute file paths instead of guessing it here.
+      if (!directory.startsWith('package:')) {
+        final parts = directory.split('/');
+        final libIndex = parts.lastIndexOf('lib');
+        void _addAllPossiblePackages(List<String> path) {
+          final google3Index = path.lastIndexOf('google3');
+          if (google3Index != -1 && google3Index + 1 < path.length) {
+            final google3PackageName = path.sublist(google3Index).join('.');
+            _rootPackages.add(google3PackageName);
+            _rootPackagePrefixes.add(google3PackageName + '.');
+          }
+          _rootPackages.add(path.last);
+        }
+
+        if (libIndex > 0) {
+          // If we found a lib directory at FOO/lib, the package is "package:/FOO
+          _addAllPossiblePackages(parts.sublist(0, libIndex));
+        }
+        _addAllPossiblePackages(parts);
+      }
+    }
+
+    await _updateLocalClasses();
+  }
+
+  Future<void> _updateLocalClasses() async {
+    _localClasses.clear();
+    if (_rootDirectories.value.isNotEmpty) {
+      final isolate = inspectorLibrary.isolate;
+      for (var libraryRef in isolate.libraries) {
+        if (_isLocalUri(libraryRef.uri)) {
+          final Library library = await inspectorLibrary.service
+              .getObject(isolate.id, libraryRef.id);
+          for (var classRef in library.classes) {
+            _localClasses[classRef.name] = classRef;
+          }
+        }
+      }
+    }
+  }
+
+  bool _isLocalUri(String rawUri) {
+    final uri = Uri.parse(rawUri);
+    if (uri.scheme != 'file' && uri.scheme != 'dart') {
+      // package scheme or some other dart specific scheme.
+      final packageName = uri.pathSegments.first;
+      if (_rootPackages.contains(packageName)) return true;
+
+      // This attempts to gracefully handle the bazel package case.
+      return _rootPackagePrefixes
+          .any((prefix) => packageName.startsWith(prefix));
+    }
+    for (var root in _rootDirectories.value) {
+      if (root.endsWith(rawUri)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  final Map<String, ClassRef> _localClasses = {};
+
+  bool isLocalClass(RemoteDiagnosticsNode node) {
+    if (node.widgetRuntimeType == null) return false;
+    final rawType = node.widgetRuntimeType.split('<').first;
+    return _localClasses.containsKey(rawType);
+  }
+
   /// As we aren't running from an IDE, we don't know exactly what the pub root
   /// directories are for the current project so we make a best guess if needed
   /// based on the the root directory of the first non artifical widget in the
   /// tree.
-  Future<String> inferPubRootDirectoryIfNeeded() async {
+  Future<List<String>> inferPubRootDirectoryIfNeeded() async {
+    final group = createObjectGroup('temp');
+    List<String> directories = await group.getPubRootDirectories() ?? [];
+    if (directories.isEmpty) {
+      final directory = await inferPubRootDirectoryIfNeededHelper();
+      if (directory != null) {
+        directories = [directory];
+      }
+    }
+
+    await onRootDirectoriesChanged(directories);
+    return directories;
+  }
+
+  Future<String> inferPubRootDirectoryIfNeededHelper() async {
     final group = createObjectGroup('temp');
     final root = await group.getRoot(FlutterTreeType.widget);
 
@@ -192,16 +308,17 @@ class InspectorService extends DisposableController
       await group.dispose();
       return null;
     }
-    final children = await root.children;
-    if (children?.isNotEmpty == true) {
-      // There are already widgets identified as being from the summary tree so
-      // no need to guess the pub root directory.
-      return null;
+    List<RemoteDiagnosticsNode> children = await root.children;
+
+    if (children?.isEmpty ?? true) {
+      children = await group.getChildren(root.dartDiagnosticRef, false, null);
     }
 
-    final List<RemoteDiagnosticsNode> allChildren =
-        await group.getChildren(root.dartDiagnosticRef, false, null);
-    final path = allChildren.first.creationLocation?.path;
+    if (children?.isEmpty ?? true) {
+      await group.dispose();
+      return null;
+    }
+    final path = children.first.creationLocation?.path;
     if (path == null) {
       await group.dispose();
       return null;
@@ -296,6 +413,7 @@ class InspectorService extends DisposableController
       isSummaryTree: false,
     );
     if (!group.disposed &&
+        group == _selectionGroups.next &&
         !_isClientTriggeredSelectionChange(pendingSelection?.valueRef)) {
       _currentSelection = pendingSelection;
       assert(group == _selectionGroups.next);
@@ -369,6 +487,14 @@ class InspectorService extends DisposableController
       'setPubRootDirectories',
       rootDirectories,
     );
+  }
+
+  Future<List<String>> getPubRootDirectories() {
+    // No need to call this from a breakpoint.
+    assert(useDaemonApi);
+    final result =
+        invokeServiceMethodDaemonNoGroup('getPubRootDirectories', null);
+    return result ?? [];
   }
 
   Future<InstanceRef> invokeServiceMethodObservatoryNoGroup(String methodName) {
@@ -516,6 +642,18 @@ class ObjectGroup {
       "WidgetInspectorService.instance.$methodName('$arg1')",
       isAlive: this,
     );
+  }
+
+  Future<Object> invokeServiceExtensionMethod(
+    RegistrableServiceExtension extension,
+    Map<String, String> parameters,
+  ) async {
+    final name = extension.name;
+    if (!serviceManager.serviceExtensionManager
+        .isServiceExtensionAvailable('ext.flutter.inspector.$name')) {
+      await invokeInspectorPolyfill(this);
+    }
+    return invokeServiceMethodDaemonParams(name, parameters);
   }
 
   Future<Object> invokeServiceMethodDaemon(String methodName,
@@ -968,10 +1106,72 @@ class ObjectGroup {
       'arg': node.dartDiagnosticRef.id,
       'subtreeDepth': subtreeDepth.toString(),
     };
-    return parseDiagnosticsNodeDaemon(invokeServiceMethodDaemonParams(
+    final json = await invokeServiceMethodDaemonParams(
       'getDetailsSubtree',
       args,
+    );
+    return parseDiagnosticsNodeHelper(json);
+  }
+
+  Future<void> invokeSetFlexProperties(
+      InspectorInstanceRef ref,
+      MainAxisAlignment mainAxisAlignment,
+      CrossAxisAlignment crossAxisAlignment,
+      ) async {
+    if (ref == null) return null;
+    await invokeServiceExtensionMethod(
+      RegistrableServiceExtension.setFlexProperties,
+      {
+        'id': ref.id,
+        'mainAxisAlignment': '$mainAxisAlignment',
+        'crossAxisAlignment': '$crossAxisAlignment',
+      },
+    );
+  }
+
+  Future<void> invokeSetFlexFactor(
+      InspectorInstanceRef ref,
+      int flexFactor,
+      ) async {
+    if (ref == null) return null;
+    await invokeServiceExtensionMethod(
+      RegistrableServiceExtension.setFlexFactor,
+      {'id': ref.id, 'flexFactor': '$flexFactor'},
+    );
+  }
+
+  Future<void> invokeSetFlexFit(
+      InspectorInstanceRef ref,
+      FlexFit flexFit,
+      ) async {
+    if (ref == null) return null;
+    await invokeServiceExtensionMethod(
+      RegistrableServiceExtension.setFlexFit,
+      {'id': ref.id, 'flexFit': '$flexFit'},
+    );
+  }
+
+  Future<RemoteDiagnosticsNode> getLayoutExplorerNode(
+      RemoteDiagnosticsNode node, {
+        int subtreeDepth = 1,
+      }) async {
+    if (node == null) return null;
+    return parseDiagnosticsNodeDaemon(invokeServiceExtensionMethod(
+      RegistrableServiceExtension.getLayoutExplorerNode,
+      {
+        'groupName': groupName,
+        'id': node.dartDiagnosticRef.id,
+        'subtreeDepth': '$subtreeDepth',
+      },
     ));
+  }
+
+  Future<List<String>> getPubRootDirectories() async {
+    final List<Object> directories = await invokeServiceExtensionMethod(
+      RegistrableServiceExtension.getPubRootDirectories,
+      {},
+    );
+    return List.from(directories ?? []);
   }
 }
 
