@@ -21,6 +21,13 @@ import 'package:mockito/mockito.dart';
 import 'support/mocks.dart';
 import 'support/wrappers.dart';
 
+Widget wrapWithInspectorControllers(Widget widget) {
+  return wrapWithControllers(
+    widget,
+    inspectorSettings: InspectorSettingsController(),
+  );
+}
+
 void main() {
   InspectorScreen screen;
   FakeServiceManager fakeServiceManager;
@@ -68,7 +75,9 @@ void main() {
     }
 
     testWidgets('builds its tab', (WidgetTester tester) async {
-      await tester.pumpWidget(wrap(Builder(builder: screen.buildTab)));
+      await tester.pumpWidget(wrapWithInspectorControllers(
+        Builder(builder: screen.buildTab),
+      ));
       expect(find.text('Flutter Inspector'), findsOneWidget);
     });
 
@@ -76,7 +85,8 @@ void main() {
         (WidgetTester tester) async {
       // Make sure the window is wide enough to display description text.
 
-      await tester.pumpWidget(wrap(Builder(builder: screen.build)));
+      await tester.pumpWidget(
+          wrapWithInspectorControllers(Builder(builder: screen.build)));
       expect(find.byType(InspectorScreenBody), findsOneWidget);
       expect(find.text('Refresh Tree'), findsOneWidget);
       expect(find.text(extensions.debugPaint.description), findsOneWidget);
@@ -103,7 +113,8 @@ void main() {
         isTrue,
       );
 
-      await tester.pumpWidget(wrap(Builder(builder: screen.build)));
+      await tester.pumpWidget(
+          wrapWithInspectorControllers(Builder(builder: screen.build)));
 
       expect(
         fakeExtensionManager.extensionValueOnDevice[
@@ -164,7 +175,8 @@ void main() {
         isTrue,
       );
 
-      await tester.pumpWidget(wrap(Builder(builder: screen.build)));
+      await tester.pumpWidget(
+          wrapWithInspectorControllers(Builder(builder: screen.build)));
       await tester.pump();
       expect(find.byType(InspectorScreenBody), findsOneWidget);
       expect(find.text(extensions.toggleOnDeviceWidgetInspector.description),

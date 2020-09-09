@@ -7,6 +7,8 @@
 
 import 'dart:async';
 
+import 'dart:convert';
+import 'package:devtools_app/src/inspector/flutter_widget.dart';
 import 'package:devtools_app/src/inspector/inspector_controller.dart';
 import 'package:devtools_app/src/inspector/inspector_service.dart';
 import 'package:flutter/material.dart';
@@ -42,11 +44,13 @@ Future<void> runInspectorControllerTests(FlutterTestEnvironment env) async {
 
     await inspectorService.inferPubRootDirectoryIfNeeded();
 
+    final inspectorSettingsController = InspectorSettingsController();
     inspectorController = InspectorController(
-      inspectorTree: FakeInspectorTree(),
-      detailsTree: FakeInspectorTree(),
+      inspectorTree: FakeInspectorTree(inspectorSettingsController),
+      detailsTree: FakeInspectorTree(inspectorSettingsController),
       inspectorService: inspectorService,
       treeType: FlutterTreeType.widget,
+      inspectorSettingsController: inspectorSettingsController,
     );
     inspectorController.setVisibleToUser(true);
     inspectorController.setActivate(true);
@@ -58,6 +62,8 @@ Future<void> runInspectorControllerTests(FlutterTestEnvironment env) async {
     // twice after being initialized.
     await tree.nextUiFrame;
     await tree.nextUiFrame;
+    print(
+        "r'''${const JsonEncoder.withIndent('  ').convert(tree.root.diagnostic.json)}'''");
   };
 
   env.beforeEveryTearDown = () async {
@@ -506,6 +512,5 @@ Future<void> runInspectorControllerTests(FlutterTestEnvironment env) async {
 
 void simulateRowClick(FakeInspectorTree tree, {@required int rowIndex}) {
   // The x coordinate does not matter as any tap in the row counts.
-  final rowOffset = Offset(0, tree.getRowY(rowIndex));
-  tree.selection = tree.getRow(rowOffset).node;
+  tree.selection = tree.rows[rowIndex].node;
 }

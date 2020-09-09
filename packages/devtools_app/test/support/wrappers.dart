@@ -6,6 +6,7 @@ import 'package:devtools_app/src/app_size/app_size_controller.dart';
 import 'package:devtools_app/src/banner_messages.dart';
 import 'package:devtools_app/src/debugger/debugger_controller.dart';
 import 'package:devtools_app/src/globals.dart';
+import 'package:devtools_app/src/inspector/inspector_controller.dart';
 import 'package:devtools_app/src/logging/logging_controller.dart';
 import 'package:devtools_app/src/memory/memory_controller.dart';
 import 'package:devtools_app/src/network/network_controller.dart';
@@ -59,6 +60,7 @@ Widget wrapWithControllers(
   NetworkController network,
   BannerMessagesController bannerMessages,
   AppSizeController appSize,
+  InspectorSettingsController inspectorSettings,
 }) {
   final _providers = [
     Provider<BannerMessagesController>.value(
@@ -72,6 +74,8 @@ Widget wrapWithControllers(
     if (network != null) Provider<NetworkController>.value(value: network),
     if (debugger != null) Provider<DebuggerController>.value(value: debugger),
     if (appSize != null) Provider<AppSizeController>.value(value: appSize),
+    if (inspectorSettings != null)
+      Provider<InspectorSettingsController>.value(value: inspectorSettings),
   ];
   return wrap(
     MultiProvider(
