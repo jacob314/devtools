@@ -85,6 +85,13 @@ Widget wrapWithControllers(
   );
 }
 
+Widget wrapWithInspectorControllers(Widget widget) {
+  return wrapWithControllers(
+    widget,
+    inspectorSettings: InspectorSettingsController(),
+  );
+}
+
 /// Call [testWidgets], allowing the test to set specific values for app globals
 /// ([MessageBus], ...).
 @isTest
