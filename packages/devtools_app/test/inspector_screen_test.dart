@@ -37,6 +37,7 @@ void main() {
 
       setGlobal(ServiceConnectionManager, fakeServiceManager);
       mockIsFlutterApp(serviceManager.connectedApp);
+
     });
 
     void mockExtensions() {

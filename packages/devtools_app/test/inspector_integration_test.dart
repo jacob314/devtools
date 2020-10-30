@@ -2,30 +2,36 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:async';
+
+import 'package:devtools_app/src/globals.dart';
+import 'package:devtools_app/src/inspector/inspector_screen.dart';
 import 'package:devtools_app/src/inspector/inspector_tree_flutter.dart';
+import 'package:devtools_testing/support/file_utils.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:devtools_testing/support/flutter_test_driver.dart'
     show FlutterRunConfiguration;
 import 'package:devtools_testing/support/flutter_test_environment.dart';
-import 'dart:async';
 
 import 'package:devtools_app/src/inspector/inspector_controller.dart';
 import 'package:devtools_app/src/inspector/inspector_service.dart';
-import 'package:flutter_test/flutter_test.dart' show TestWidgetsFlutterBinding, equalsIgnoringHashCodes;
+import 'package:flutter_test/flutter_test.dart' show TestWidgetsFlutterBinding;
 
-import 'package:devtools_testing/matchers/matchers.dart';
-import 'package:devtools_testing/support/flutter_test_environment.dart';
+import 'support/wrappers.dart';
 
 void main() async {
   // We need to use real async in this test so we need to use this binding.
-  LiveTestWidgetsFlutterBinding();
+  TestWidgetsFlutterBinding.ensureInitialized({'FLUTTER_TEST': 'false'});
+  const windowSize = Size(2600.0, 1200.0);
+
   final FlutterTestEnvironment env = FlutterTestEnvironment(
     const FlutterRunConfiguration(withDebugger: true),
   );
 
   InspectorService inspectorService;
-  InspectorController inspectorController;
 
   env.afterNewSetup = () async {
     await ensureInspectorServiceDependencies();
@@ -48,8 +54,8 @@ void main() async {
   };
 
   env.beforeEveryTearDown = () async {
-    inspectorController?.dispose();
-    inspectorController = null;
+    //inspectorController?.dispose();
+    //inspectorController = null;
     inspectorService?.dispose();
     inspectorService = null;
   };
@@ -59,16 +65,20 @@ void main() async {
       await env.tearDownEnvironment(force: true);
     });
 
-    testWidgets('initial state',
+    testWidgetsWithWindowSize('inititial state', windowSize,
               (WidgetTester tester) async {
       await env.setupEnvironment();
 
-      await tester.pumpAndSettle(const Duration(seconds: 1));
+      const screen = InspectorScreen();
+      await tester.pumpWidget(
+          wrapWithInspectorControllers(Builder(builder: screen.build)));
+      await tester.pumpAndSettle(const Duration(seconds: 15));
       await expectLater(
-        find.byType(InspectorTree),
-        matchesGoldenFile('goldens/details_tree_container.png'),
+        find.byType(InspectorScreenBody),
+        matchesGoldenFile('goldens/integration_inspector_initial_load.png'),
       );
-
+      // TODO(jacobr): remove.
+      await tester.pumpWidget(const SizedBox());
       await env.tearDownEnvironment();
     });
 

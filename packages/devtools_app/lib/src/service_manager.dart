@@ -152,6 +152,7 @@ class ServiceConnectionManager {
     VmServiceWrapper service, {
     @required Future<void> onClosed,
   }) async {
+    print("VMSERVICE OPENED! ${StackTrace.current}");
     final serviceStreamName = await service.serviceStreamName;
 
     final vm = await service.getVM();

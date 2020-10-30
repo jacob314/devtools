@@ -866,13 +866,17 @@ class InspectorController extends DisposableController
     final flutterVersionServiceListenable = serviceManager
         .registeredServiceListenable(registrations.flutterVersion.service);
     addAutoDisposeListener(flutterVersionServiceListenable, () async {
-      final registered = flutterVersionServiceListenable.value;
-      if (registered) {
-        final flutterVersion =
-            FlutterVersion.parse((await serviceManager.flutterVersion).json);
-        if (flutterVersion.isSupported(supportedVersion: version)) {
-          callback();
+      try {
+        final registered = flutterVersionServiceListenable.value;
+        if (registered) {
+          final flutterVersion =
+          FlutterVersion.parse((await serviceManager.flutterVersion).json);
+          if (flutterVersion.isSupported(supportedVersion: version)) {
+            callback();
+          }
         }
+      } catch (e) {
+        // Ignore.
       }
     });
   }
