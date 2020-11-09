@@ -67,11 +67,24 @@ void main() async {
 
     testWidgetsWithWindowSize('inititial state', windowSize,
               (WidgetTester tester) async {
+      print("XXX setting up env");
       await env.setupEnvironment();
+      expect(serviceManager.service, equals(env.service));
+      expect(serviceManager.isolateManager, isNotNull);
 
       const screen = InspectorScreen();
       await tester.pumpWidget(
           wrapWithInspectorControllers(Builder(builder: screen.build)));
+      print ("XXX env. ${env.service.connectedUri}");
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+      InspectorScreenBodyState state = tester.state(find.byType(InspectorScreenBody));
+      final controller = state.inspectorController;
+      while(!controller.flutterAppFrameReady) {
+        await state.inspectorController.maybeLoadUI();
+        print("XXX checking if loaded. ${controller.flutterAppFrameReady}");
+        await tester.pumpAndSettle(const Duration(seconds: 1));
+      }
+      print("DONESZO");
       await tester.pumpAndSettle(const Duration(seconds: 15));
       await expectLater(
         find.byType(InspectorScreenBody),

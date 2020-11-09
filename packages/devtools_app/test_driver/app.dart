@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+/*
 import 'package:devtools_app/src/framework/framework_core.dart';
 import 'package:devtools_app/src/globals.dart';
 import 'package:devtools_app/src/navigation.dart';
@@ -18,7 +19,7 @@ import 'package:flutter_driver/driver_extension.dart';
 void main() async {
   Future<String> handler(
       String message,
-      {Duration timeout},
+      {Duration timeout,}
       ) async {
     print("XXX got message: $message");
     final connectPrefix = 'connect:';
@@ -60,3 +61,4 @@ void main() async {
     DevToolsApp(defaultScreens, preferences, ideTheme, await analyticsProvider),
   );
 }
+*/

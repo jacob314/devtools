@@ -426,6 +426,7 @@ class InspectorService extends DisposableController
   }
 
   void onDebugVmServiceReceived(Event event) {
+    print("Got debug event: ${event.extensionKind}");
     if (event.kind == EventKind.kInspect) {
       // Update the UI in IntelliJ.
       notifySelectionChanged();
@@ -433,7 +434,9 @@ class InspectorService extends DisposableController
   }
 
   void onExtensionVmServiceRecieved(Event e) {
+    print("Got event: ${e.extensionKind}");
     if ('Flutter.Frame' == e.extensionKind) {
+      print("XXX got frame event");
       for (InspectorServiceClient client in clients) {
         try {
           client.onFlutterFrame();
@@ -453,6 +456,7 @@ class InspectorService extends DisposableController
   }
 
   Future<bool> invokeBoolServiceMethodNoArgs(String methodName) async {
+    print("XXX invoking ${methodName}... ${useDaemonApi} ");
     if (useDaemonApi) {
       return await invokeServiceMethodDaemonNoGroupArgs(methodName) == true;
     } else {
@@ -502,6 +506,8 @@ class InspectorService extends DisposableController
   Future<Object> invokeServiceMethodDaemonNoGroup(
       String methodName, Map<String, Object> args) async {
     final callMethodName = 'ext.flutter.inspector.$methodName';
+    print("isAvail=${serviceManager.serviceExtensionManager
+        .isServiceExtensionAvailable(callMethodName)}");
     if (!serviceManager.serviceExtensionManager
         .isServiceExtensionAvailable(callMethodName)) {
       return {'result': null};

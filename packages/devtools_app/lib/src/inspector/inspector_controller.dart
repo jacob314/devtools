@@ -386,12 +386,14 @@ class InspectorController extends DisposableController
   Future<void> maybeLoadUI() async {
     if (parent != null) {
       // The parent controller will drive loading the UI.
+      return;
     }
     if (!visibleToUser || !isActive) {
       return;
     }
 
     if (flutterAppFrameReady) {
+      print("Flutter frame ready!");
       _rootDirectories =
           await inspectorService.inferPubRootDirectoryIfNeeded();
       // We need to start by querying the inspector service to find out the
@@ -399,6 +401,8 @@ class InspectorController extends DisposableController
       await updateSelectionFromService(firstFrame: true);
     } else {
       final ready = await inspectorService.isWidgetTreeReady();
+      final vm = await inspectorService.vmService.getVM();
+      print("Polling ready = $ready");
       flutterAppFrameReady = ready;
       if (isActive && ready) {
         await maybeLoadUI();

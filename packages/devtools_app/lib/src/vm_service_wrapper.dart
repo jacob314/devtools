@@ -682,6 +682,7 @@ class VmServiceWrapper implements VmService {
 
   @override
   Future<Success> resume(String isolateId, {String step, int frameIndex}) {
+    print("XXX called resume!");
     return trackFuture('resume',
         _vmService.resume(isolateId, step: step, frameIndex: frameIndex));
   }
