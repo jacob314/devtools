@@ -9,8 +9,14 @@ import 'inspector_service.dart';
 const _inspectorPolyfillStart = '// INSPECTOR_POLYFILL_SCRIPT_START\n';
 const _inspectorPolyfillEnd = '// INSPECTOR_POLYFILL_SCRIPT_END\n';
 
-Future<String> loadPolyfillScript() {
-  return asset.loadString('packages/devtools_app/assets/scripts/inspector_polyfill_script.dart');
+Future<String> loadPolyfillScript() async {
+  final path = 'assets/scripts/inspector_polyfill_script.dart';
+  try {
+    return await asset.loadString(path);
+  } catch (e) {
+    // Fallback that works for unittests.
+    return await asset.loadString('packages/devtools_app/$path');
+  }
 }
 
 final _polyfillReadyExpando = Expando<Future>();
