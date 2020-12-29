@@ -10,6 +10,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 
+import 'package:devtools_app/src/octicons.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
@@ -204,34 +205,42 @@ class InspectorService extends DisposableController
   ValueListenable<List<String>> get rootDirectories => _rootDirectories;
   final ValueNotifier<List<String>> _rootDirectories = ValueNotifier([]);
 
+  @visibleForTesting
+  Set<String> get rootPackages => _rootPackages;
   Set<String> _rootPackages;
+
+  @visibleForTesting
+  List<String> get rootPackagePrefixes => _rootPackagePrefixes;
   List<String> _rootPackagePrefixes;
 
-  Future<void> onRootDirectoriesChanged(List<String> directories) async {
+  Future<void> _onRootDirectoriesChanged(List<String> directories) async {
     _rootDirectories.value = directories;
     _rootPackages = {};
     _rootPackagePrefixes = [];
     for (var directory in directories) {
       // TODO(jacobr): add an API to DDS to provide the actual mapping to and
-      // from absolute file paths instead of guessing it here.
-      if (!directory.startsWith('package:')) {
-        final parts = directory.split('/');
-        final libIndex = parts.lastIndexOf('lib');
-        void _addAllPossiblePackages(List<String> path) {
-          final google3Index = path.lastIndexOf('google3');
-          if (google3Index != -1 && google3Index + 1 < path.length) {
-            final google3PackageName = path.sublist(google3Index).join('.');
-            _rootPackages.add(google3PackageName);
-            _rootPackagePrefixes.add(google3PackageName + '.');
-          }
-          _rootPackages.add(path.last);
-        }
+      // from absolute file paths to packages instead of having to guess it
+      // here.
+      assert(!directory.startsWith('package:'));
 
-        if (libIndex > 0) {
-          // If we found a lib directory at FOO/lib, the package is "package:/FOO
-          _addAllPossiblePackages(parts.sublist(0, libIndex));
+      final parts =
+          directory.split('/').where((element) => element.isNotEmpty).toList();
+      final libIndex = parts.lastIndexOf('lib');
+      final path = libIndex > 0 ? parts.sublist(0, libIndex) : parts;
+      // Special case handling of bazel packages.
+      final google3Index = path.lastIndexOf('google3');
+      if (google3Index != -1 && google3Index + 1 < path.length) {
+        var packageParts = path.sublist(google3Index + 1);
+        //
+        if (packageParts[0] == 'third_party' && packageParts.length >= 3) {
+          assert(packageParts[1] == 'dart' || packageParts[1] == 'dart_src');
+          packageParts = packageParts.sublist(2);
         }
-        _addAllPossiblePackages(parts);
+        final google3PackageName = packageParts.join('.');
+        _rootPackages.add(google3PackageName);
+        _rootPackagePrefixes.add(google3PackageName + '.');
+      } else {
+        _rootPackages.add(path.last);
       }
     }
 
@@ -239,22 +248,23 @@ class InspectorService extends DisposableController
   }
 
   Future<void> _updateLocalClasses() async {
-    _localClasses.clear();
+    localClasses.clear();
     if (_rootDirectories.value.isNotEmpty) {
       final isolate = inspectorLibrary.isolate;
       for (var libraryRef in isolate.libraries) {
-        if (_isLocalUri(libraryRef.uri)) {
+        if (isLocalUri(libraryRef.uri)) {
           final Library library = await inspectorLibrary.service
               .getObject(isolate.id, libraryRef.id);
           for (var classRef in library.classes) {
-            _localClasses[classRef.name] = classRef;
+            localClasses[classRef.name] = classRef;
           }
         }
       }
     }
   }
 
-  bool _isLocalUri(String rawUri) {
+  @visibleForTesting
+  bool isLocalUri(String rawUri) {
     final uri = Uri.parse(rawUri);
     if (uri.scheme != 'file' && uri.scheme != 'dart') {
       // package scheme or some other dart specific scheme.
@@ -273,12 +283,13 @@ class InspectorService extends DisposableController
     return false;
   }
 
-  final Map<String, ClassRef> _localClasses = {};
+  @visibleForTesting
+  final Map<String, ClassRef> localClasses = {};
 
   bool isLocalClass(RemoteDiagnosticsNode node) {
     if (node.widgetRuntimeType == null) return false;
     final rawType = node.widgetRuntimeType.split('<').first;
-    return _localClasses.containsKey(rawType);
+    return localClasses.containsKey(rawType);
   }
 
   /// As we aren't running from an IDE, we don't know exactly what the pub root
@@ -295,7 +306,7 @@ class InspectorService extends DisposableController
       }
     }
 
-    await onRootDirectoriesChanged(directories);
+    await _onRootDirectoriesChanged(directories);
     return directories;
   }
 
@@ -349,7 +360,7 @@ class InspectorService extends DisposableController
     }
     pubRootDirectory ??= (parts..removeLast()).join('/');
 
-    await setPubRootDirectories([pubRootDirectory]);
+    await _setPubRootDirectories([pubRootDirectory]);
     await group.dispose();
     return pubRootDirectory;
   }
@@ -480,7 +491,12 @@ class InspectorService extends DisposableController
     return invokeServiceMethodDaemonNoGroup(methodName, params);
   }
 
-  Future<void> setPubRootDirectories(List<String> rootDirectories) {
+  Future<void> setPubRootDirectories(List<String> rootDirectories) async {
+    await _setPubRootDirectories(rootDirectories);
+    await _onRootDirectoriesChanged(rootDirectories);
+  }
+
+  Future<void> _setPubRootDirectories(List<String> rootDirectories) {
     // No need to call this from a breakpoint.
     assert(useDaemonApi);
     return invokeServiceMethodDaemonNoGroupArgs(
@@ -1114,10 +1130,10 @@ class ObjectGroup {
   }
 
   Future<void> invokeSetFlexProperties(
-      InspectorInstanceRef ref,
-      MainAxisAlignment mainAxisAlignment,
-      CrossAxisAlignment crossAxisAlignment,
-      ) async {
+    InspectorInstanceRef ref,
+    MainAxisAlignment mainAxisAlignment,
+    CrossAxisAlignment crossAxisAlignment,
+  ) async {
     if (ref == null) return null;
     await invokeServiceExtensionMethod(
       RegistrableServiceExtension.setFlexProperties,
@@ -1130,9 +1146,9 @@ class ObjectGroup {
   }
 
   Future<void> invokeSetFlexFactor(
-      InspectorInstanceRef ref,
-      int flexFactor,
-      ) async {
+    InspectorInstanceRef ref,
+    int flexFactor,
+  ) async {
     if (ref == null) return null;
     await invokeServiceExtensionMethod(
       RegistrableServiceExtension.setFlexFactor,
@@ -1141,9 +1157,9 @@ class ObjectGroup {
   }
 
   Future<void> invokeSetFlexFit(
-      InspectorInstanceRef ref,
-      FlexFit flexFit,
-      ) async {
+    InspectorInstanceRef ref,
+    FlexFit flexFit,
+  ) async {
     if (ref == null) return null;
     await invokeServiceExtensionMethod(
       RegistrableServiceExtension.setFlexFit,
@@ -1152,9 +1168,9 @@ class ObjectGroup {
   }
 
   Future<RemoteDiagnosticsNode> getLayoutExplorerNode(
-      RemoteDiagnosticsNode node, {
-        int subtreeDepth = 1,
-      }) async {
+    RemoteDiagnosticsNode node, {
+    int subtreeDepth = 1,
+  }) async {
     if (node == null) return null;
     return parseDiagnosticsNodeDaemon(invokeServiceExtensionMethod(
       RegistrableServiceExtension.getLayoutExplorerNode,
