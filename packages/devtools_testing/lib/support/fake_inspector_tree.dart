@@ -5,38 +5,23 @@
 // ignore_for_file: implementation_imports
 
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:devtools_app/src/inspector/inspector_tree.dart';
+import 'package:devtools_app/src/inspector/inspector_controller.dart';
 import 'package:devtools_app/src/ui/icons.dart';
 
 const double fakeRowWidth = 200.0;
 
-class FakeInspectorTree extends InspectorTreeController
-    with InspectorTreeFixedRowHeightController {
-  FakeInspectorTree();
+class FakeInspectorTree extends InspectorTreeController {
+  FakeInspectorTree(InspectorSettingsController inspectorSettingsController)
+      : super(inspectorSettingsController);
 
   final List<Rect> scrollToRequests = [];
 
   @override
   InspectorTreeNode createNode() {
     return InspectorTreeNode();
-  }
-
-  @override
-  Rect getBoundingBox(InspectorTreeRow row) {
-    return Rect.fromLTWH(
-      getDepthIndent(row.depth),
-      getRowY(row.index),
-      fakeRowWidth,
-      rowHeight,
-    );
-  }
-
-  @override
-  void scrollToRect(Rect targetRect) {
-    scrollToRequests.add(targetRect);
   }
 
   Completer<void> setStateCalled;
@@ -59,42 +44,24 @@ class FakeInspectorTree extends InspectorTreeController
 
   // Debugging string to make it easy to write integration tests.
   String toStringDeep(
-      {bool hidePropertyLines = false, bool includeTextStyles = false}) {
+      {bool hidePropertyLines = false,
+      bool includeTextStyles = false,
+      bool showAnimation = false}) {
     if (root == null) return '<empty>\n';
     // Visualize the ticks computed for this node so that bugs in the tick
     // computation code will result in rendering artifacts in the text output.
     final StringBuffer sb = StringBuffer();
-    for (int i = 0; i < numRows; i++) {
-      final row = getCachedRow(i);
-      if (hidePropertyLines && row?.node?.diagnostic?.isProperty == true) {
+
+    for (var animatedRow in animatedRows) {
+      if (!showAnimation && animatedRow.current == null) {
         continue;
       }
-      int last = 0;
-      for (int tick in row.ticks) {
-        // Visualize the line to parent if there is one.
-        if (tick - last > 0) {
-          sb.write('  ' * (tick - last));
-        }
-        if (tick == (row.depth - 1) && row.lineToParent) {
-          sb.write('├─');
-        } else {
-          sb.write('│ ');
-        }
-        last = max(tick, 1);
+      if (hidePropertyLines &&
+          animatedRow?.node?.diagnostic?.isProperty == true) {
+        continue;
       }
-      final int delta = row.depth - last;
-      if (delta > 0) {
-        if (row.lineToParent) {
-          if (delta > 1 || last == 0) {
-            sb.write('  ' * (delta - 1));
-            sb.write('└─');
-          } else {
-            sb.write('──');
-          }
-        } else {
-          sb.write('  ' * delta);
-        }
-      }
+      final row = animatedRow.targetRow;
+      sb.write('  ' * row.depth);
       final InspectorTreeNode node = row?.node;
       final diagnostic = node?.diagnostic;
       if (diagnostic == null) {
@@ -117,6 +84,9 @@ class FakeInspectorTree extends InspectorTreeController
         sb.write('[${icon.color.value}]');
       } else if (icon is Image) {
         sb.write('[${(icon.image as AssetImage).assetName}]');
+      }
+      if (node.diagnostic.isProperty) {
+        sb.write('${node.diagnostic.name}: ');
       }
       sb.write(node.diagnostic.description);
 
@@ -144,8 +114,36 @@ class FakeInspectorTree extends InspectorTreeController
       if (row.isSelected) {
         sb.write(' <-- selected');
       }
+      if (showAnimation) {
+        if (animatedRow.animateRow) {
+          if (animatedRow.current == null) {
+            sb.write(' (animate out)');
+          } else if (animatedRow.last == null) {
+            sb.write(' (animate in)');
+          } else {
+            sb.write(' (changing');
+            if (animatedRow.current.node != animatedRow.last.node) {
+              sb.write(' node');
+            }
+            if (animatedRow.current.depth != animatedRow.last.depth) {
+              sb.write(
+                  ' depth from ${animatedRow.last.depth} to ${animatedRow.current.depth}');
+            }
+            sb.write(')');
+          }
+
+          if (animatedRow.snapAnimationToEnd) {
+            sb.write(' snapAnimationToEnd');
+          }
+        }
+      }
       sb.write('\n');
     }
     return sb.toString();
+  }
+
+  @override
+  void animateToTargets(List<InspectorTreeNode> targets) {
+    // No need to support.
   }
 }

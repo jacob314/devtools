@@ -425,7 +425,7 @@ class RemoteDiagnosticsNode extends DiagnosticableTree {
 
   Map<String, Object> get valuePropertiesJson => json['valueProperties'];
 
-  bool get hasChildren {
+  bool get maybeHasChildren {
     // In the summary tree, json['hasChildren']==true when the node has details
     // tree children so we need to first check whether the list of children for
     // the node in the tree was specified. If there is an empty list of children
@@ -453,7 +453,9 @@ class RemoteDiagnosticsNode extends DiagnosticableTree {
 
   /// Check whether children are already available.
   bool get childrenReady {
-    return json.containsKey('children') || _children != null || !hasChildren;
+    return json.containsKey('children') ||
+        _children != null ||
+        !maybeHasChildren;
   }
 
   Future<List<RemoteDiagnosticsNode>> get children async {
@@ -467,9 +469,11 @@ class RemoteDiagnosticsNode extends DiagnosticableTree {
     return _children;
   }
 
+  bool get childrenAvailableNow => !maybeHasChildren || _children != null;
+
   Future<void> _computeChildren() async {
     _maybePopulateChildren();
-    if (!hasChildren || _children != null) {
+    if (childrenAvailableNow) {
       return;
     }
 
@@ -495,7 +499,7 @@ class RemoteDiagnosticsNode extends DiagnosticableTree {
   }
 
   void _maybePopulateChildren() {
-    if (!hasChildren || _children != null) {
+    if (!maybeHasChildren || _children != null) {
       return;
     }
 

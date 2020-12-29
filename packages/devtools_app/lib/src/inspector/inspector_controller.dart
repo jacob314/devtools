@@ -75,6 +75,7 @@ class InspectorController extends DisposableController
     this.isSummaryTree = true,
     this.onExpandCollapseSupported,
     this.onLayoutExplorerSupported,
+    @required this.inspectorSettingsController,
   })  : _treeGroups = InspectorObjectGroupManager(inspectorService, 'tree'),
         _selectionGroups =
             InspectorObjectGroupManager(inspectorService, 'selection') {
@@ -97,6 +98,7 @@ class InspectorController extends DisposableController
         treeType: treeType,
         parent: this,
         isSummaryTree: false,
+        inspectorSettingsController: inspectorSettingsController,
       );
     } else {
       details = null;
@@ -148,6 +150,7 @@ class InspectorController extends DisposableController
     }
   }
 
+  final InspectorSettingsController inspectorSettingsController;
   final List<VoidCallback> _selectionListeners = [];
 
   void addSelectionListener(VoidCallback listener) {
@@ -692,7 +695,7 @@ class InspectorController extends DisposableController
     // a node is selected, its properties will also be selected as by
     // convention properties are the first children of a node and properties
     // typically do not have children and are never expanded by default.
-    for (InspectorTreeNode child in node.children) {
+    for (InspectorTreeNode child in node.childrenFiltered) {
       final RemoteDiagnosticsNode diagnosticsNode = child.diagnostic;
       targets.add(child);
       if (!child.isLeaf && child.isExpanded) {

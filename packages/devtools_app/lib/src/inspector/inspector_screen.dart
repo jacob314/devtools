@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:vm_service/vm_service.dart' hide Stack;
 
 import '../analytics/analytics_stub.dart'
@@ -20,6 +21,7 @@ import '../theme.dart';
 import '../ui/label.dart';
 import '../ui/service_extension_widgets.dart';
 import 'inspector_controller.dart';
+import 'inspector_filter.dart';
 import 'inspector_screen_details_tab.dart';
 import 'inspector_service.dart';
 import 'inspector_tree_flutter.dart';
@@ -62,8 +64,17 @@ class InspectorScreenBodyState extends State<InspectorScreenBody>
   InspectorTreeControllerFlutter detailsTreeController;
   bool displayedWidgetTrackingNotice = false;
 
+  InspectorSettingsController inspectorSettingsController;
+
   bool get enableButtons =>
       actionInProgress == false && connectionInProgress == false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    inspectorSettingsController =
+        Provider.of<InspectorSettingsController>(context);
+  }
 
   @override
   void initState() {
@@ -112,7 +123,6 @@ class InspectorScreenBodyState extends State<InspectorScreenBody>
     return Column(
       children: <Widget>[
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ValueListenableBuilder(
               valueListenable: serviceManager.serviceExtensionManager
@@ -130,15 +140,21 @@ class InspectorScreenBodyState extends State<InspectorScreenBody>
               },
             ),
             const SizedBox(width: denseSpacing),
-            Container(
-              height: Theme.of(context).buttonTheme.height,
-              child: OutlineButton(
-                onPressed: _refreshInspector,
-                child: const MaterialIconLabel(
-                  Icons.refresh,
-                  'Refresh Tree',
-                  includeTextWidth: 750,
-                ),
+            OutlineButton(
+              onPressed: _refreshInspector,
+              child: const MaterialIconLabel(
+                Icons.refresh,
+                'Refresh Tree',
+                includeTextWidth: 750,
+              ),
+            ),
+            const SizedBox(width: denseSpacing),
+            OutlineButton(
+              onPressed: _filter,
+              child: const MaterialIconLabel(
+                Icons.filter_list,
+                'Filter Tree',
+                includeTextWidth: 850,
               ),
             ),
             const Spacer(),
@@ -178,7 +194,7 @@ class InspectorScreenBodyState extends State<InspectorScreenBody>
       ),
       const SizedBox(width: denseSpacing),
       ServiceExtensionButtonGroup(
-        minIncludeTextWidth: 1250,
+        minIncludeTextWidth: 1450,
         extensions: [
           extensions.repaintRainbow,
           extensions.invertOversizedImages,
@@ -187,6 +203,14 @@ class InspectorScreenBodyState extends State<InspectorScreenBody>
       // TODO(jacobr): implement TogglePlatformSelector.
       //  TogglePlatformSelector().selector
     ];
+  }
+
+  void _filter() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) => InspectorFilterDialog(
+          inspectorController.inspectorSettingsController),
+    );
   }
 
   Widget _expandCollapseButtons() {
@@ -255,8 +279,13 @@ class InspectorScreenBodyState extends State<InspectorScreenBody>
 
     setState(() {
       inspectorController?.dispose();
-      summaryTreeController = InspectorTreeControllerFlutter();
-      detailsTreeController = InspectorTreeControllerFlutter();
+      // TODO(jacobr): switch to using provider.
+      summaryTreeController =
+          InspectorTreeControllerFlutter(inspectorSettingsController);
+      detailsTreeController =
+          InspectorTreeControllerFlutter(inspectorSettingsController);
+      // TODO(jacobr): move all of the inspector controllers to providers.
+
       inspectorController = InspectorController(
         inspectorTree: summaryTreeController,
         detailsTree: detailsTreeController,
@@ -264,6 +293,7 @@ class InspectorScreenBodyState extends State<InspectorScreenBody>
         treeType: FlutterTreeType.widget,
         onExpandCollapseSupported: _onExpandCollapseSupported,
         onLayoutExplorerSupported: _onLayoutExplorerSupported,
+        inspectorSettingsController: inspectorSettingsController,
       );
 
       // TODO(jacobr): move this notice display to once a day.
