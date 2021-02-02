@@ -5,7 +5,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:devtools_app/src/debugger/debugger_controller.dart';
 import 'package:devtools_app/src/debugger/debugger_model.dart';
 import 'package:devtools_app/src/globals.dart';
 import 'package:devtools_app/src/service_manager.dart';
@@ -17,9 +16,15 @@ import 'package:vm_service/vm_service.dart';
 
 import 'support/mocks.dart';
 
+final isolateRef = IsolateRef(
+  id: '1',
+  number: '2',
+  name: 'main',
+  isSystemIsolate: false,
+);
+
 void main() {
   ServiceConnectionManager manager;
-  DebuggerController debuggerController;
 
   setUp(() {
     final service = MockVmService();
@@ -40,13 +45,6 @@ void main() {
     });
     manager = FakeServiceManager(service: service);
     setGlobal(ServiceConnectionManager, manager);
-    debuggerController = DebuggerController(initialSwitchToIsolate: false)
-      ..isolateRef = IsolateRef(
-        id: '1',
-        number: '2',
-        name: 'main',
-        isSystemIsolate: false,
-      );
   });
 
   test('Creates bound variables for Uint8ClampedList instance', () async {
@@ -57,18 +55,21 @@ void main() {
       classRef: null,
       bytes: base64.encode(bytes.buffer.asUint8List()),
     );
-    final variable = Variable.create(BoundVariable(
-      name: 'test',
-      value: instance,
-      declarationTokenPos: null,
-      scopeEndTokenPos: null,
-      scopeStartTokenPos: null,
-    ));
+    final variable = Variable.create(
+      BoundVariable(
+        name: 'test',
+        value: instance,
+        declarationTokenPos: null,
+        scopeEndTokenPos: null,
+        scopeStartTokenPos: null,
+      ),
+      isolateRef,
+    );
     when(manager.service.getObject(any, any)).thenAnswer((_) async {
       return instance;
     });
 
-    await debuggerController.buildVariablesTree(variable);
+    await buildVariablesTree(variable);
 
     expect(variable.children, [
       matchesVariable(name: '[0]', value: 0),
@@ -86,18 +87,21 @@ void main() {
       classRef: null,
       bytes: base64.encode(bytes.buffer.asUint8List()),
     );
-    final variable = Variable.create(BoundVariable(
-      name: 'test',
-      value: instance,
-      declarationTokenPos: null,
-      scopeEndTokenPos: null,
-      scopeStartTokenPos: null,
-    ));
+    final variable = Variable.create(
+      BoundVariable(
+        name: 'test',
+        value: instance,
+        declarationTokenPos: null,
+        scopeEndTokenPos: null,
+        scopeStartTokenPos: null,
+      ),
+      isolateRef,
+    );
     when(manager.service.getObject(any, any)).thenAnswer((_) async {
       return instance;
     });
 
-    await debuggerController.buildVariablesTree(variable);
+    await buildVariablesTree(variable);
 
     expect(variable.children, [
       matchesVariable(name: '[0]', value: 0),
@@ -115,18 +119,21 @@ void main() {
       classRef: null,
       bytes: base64.encode(bytes.buffer.asUint8List()),
     );
-    final variable = Variable.create(BoundVariable(
-      name: 'test',
-      value: instance,
-      declarationTokenPos: null,
-      scopeEndTokenPos: null,
-      scopeStartTokenPos: null,
-    ));
+    final variable = Variable.create(
+      BoundVariable(
+        name: 'test',
+        value: instance,
+        declarationTokenPos: null,
+        scopeEndTokenPos: null,
+        scopeStartTokenPos: null,
+      ),
+      isolateRef,
+    );
     when(manager.service.getObject(any, any)).thenAnswer((_) async {
       return instance;
     });
 
-    await debuggerController.buildVariablesTree(variable);
+    await buildVariablesTree(variable);
 
     expect(variable.children, [
       matchesVariable(name: '[0]', value: 0),
@@ -144,18 +151,21 @@ void main() {
       classRef: null,
       bytes: base64.encode(bytes.buffer.asUint8List()),
     );
-    final variable = Variable.create(BoundVariable(
-      name: 'test',
-      value: instance,
-      declarationTokenPos: null,
-      scopeEndTokenPos: null,
-      scopeStartTokenPos: null,
-    ));
+    final variable = Variable.create(
+      BoundVariable(
+        name: 'test',
+        value: instance,
+        declarationTokenPos: null,
+        scopeEndTokenPos: null,
+        scopeStartTokenPos: null,
+      ),
+      isolateRef,
+    );
     when(manager.service.getObject(any, any)).thenAnswer((_) async {
       return instance;
     });
 
-    await debuggerController.buildVariablesTree(variable);
+    await buildVariablesTree(variable);
 
     expect(variable.children, [
       matchesVariable(name: '[0]', value: 0),
@@ -173,18 +183,21 @@ void main() {
       classRef: null,
       bytes: base64.encode(bytes.buffer.asUint8List()),
     );
-    final variable = Variable.create(BoundVariable(
-      name: 'test',
-      value: instance,
-      declarationTokenPos: null,
-      scopeEndTokenPos: null,
-      scopeStartTokenPos: null,
-    ));
+    final variable = Variable.create(
+      BoundVariable(
+        name: 'test',
+        value: instance,
+        declarationTokenPos: null,
+        scopeEndTokenPos: null,
+        scopeStartTokenPos: null,
+      ),
+      isolateRef,
+    );
     when(manager.service.getObject(any, any)).thenAnswer((_) async {
       return instance;
     });
 
-    await debuggerController.buildVariablesTree(variable);
+    await buildVariablesTree(variable);
 
     expect(variable.children, [
       matchesVariable(name: '[0]', value: 0),
@@ -202,18 +215,21 @@ void main() {
       classRef: null,
       bytes: base64.encode(bytes.buffer.asUint8List()),
     );
-    final variable = Variable.create(BoundVariable(
-      name: 'test',
-      value: instance,
-      declarationTokenPos: null,
-      scopeEndTokenPos: null,
-      scopeStartTokenPos: null,
-    ));
+    final variable = Variable.create(
+      BoundVariable(
+        name: 'test',
+        value: instance,
+        declarationTokenPos: null,
+        scopeEndTokenPos: null,
+        scopeStartTokenPos: null,
+      ),
+      isolateRef,
+    );
     when(manager.service.getObject(any, any)).thenAnswer((_) async {
       return instance;
     });
 
-    await debuggerController.buildVariablesTree(variable);
+    await buildVariablesTree(variable);
 
     expect(variable.children, [
       matchesVariable(name: '[0]', value: 0),
@@ -231,18 +247,21 @@ void main() {
       classRef: null,
       bytes: base64.encode(bytes.buffer.asUint8List()),
     );
-    final variable = Variable.create(BoundVariable(
-      name: 'test',
-      value: instance,
-      declarationTokenPos: null,
-      scopeEndTokenPos: null,
-      scopeStartTokenPos: null,
-    ));
+    final variable = Variable.create(
+      BoundVariable(
+        name: 'test',
+        value: instance,
+        declarationTokenPos: null,
+        scopeEndTokenPos: null,
+        scopeStartTokenPos: null,
+      ),
+      isolateRef,
+    );
     when(manager.service.getObject(any, any)).thenAnswer((_) async {
       return instance;
     });
 
-    await debuggerController.buildVariablesTree(variable);
+    await buildVariablesTree(variable);
 
     expect(variable.children, [
       matchesVariable(name: '[0]', value: 0),
@@ -260,18 +279,21 @@ void main() {
       classRef: null,
       bytes: base64.encode(bytes.buffer.asUint8List()),
     );
-    final variable = Variable.create(BoundVariable(
-      name: 'test',
-      value: instance,
-      declarationTokenPos: null,
-      scopeEndTokenPos: null,
-      scopeStartTokenPos: null,
-    ));
+    final variable = Variable.create(
+      BoundVariable(
+        name: 'test',
+        value: instance,
+        declarationTokenPos: null,
+        scopeEndTokenPos: null,
+        scopeStartTokenPos: null,
+      ),
+      isolateRef,
+    );
     when(manager.service.getObject(any, any)).thenAnswer((_) async {
       return instance;
     });
 
-    await debuggerController.buildVariablesTree(variable);
+    await buildVariablesTree(variable);
 
     expect(variable.children, [
       matchesVariable(name: '[0]', value: 0),
@@ -289,18 +311,21 @@ void main() {
       classRef: null,
       bytes: base64.encode(bytes.buffer.asUint8List()),
     );
-    final variable = Variable.create(BoundVariable(
-      name: 'test',
-      value: instance,
-      declarationTokenPos: null,
-      scopeEndTokenPos: null,
-      scopeStartTokenPos: null,
-    ));
+    final variable = Variable.create(
+      BoundVariable(
+        name: 'test',
+        value: instance,
+        declarationTokenPos: null,
+        scopeEndTokenPos: null,
+        scopeStartTokenPos: null,
+      ),
+      isolateRef,
+    );
     when(manager.service.getObject(any, any)).thenAnswer((_) async {
       return instance;
     });
 
-    await debuggerController.buildVariablesTree(variable);
+    await buildVariablesTree(variable);
 
     expect(variable.children, [
       matchesVariable(name: '[0]', value: 0),
@@ -319,18 +344,21 @@ void main() {
       classRef: null,
       bytes: base64.encode(bytes.buffer.asUint8List()),
     );
-    final variable = Variable.create(BoundVariable(
-      name: 'test',
-      value: instance,
-      declarationTokenPos: null,
-      scopeEndTokenPos: null,
-      scopeStartTokenPos: null,
-    ));
+    final variable = Variable.create(
+      BoundVariable(
+        name: 'test',
+        value: instance,
+        declarationTokenPos: null,
+        scopeEndTokenPos: null,
+        scopeStartTokenPos: null,
+      ),
+      isolateRef,
+    );
     when(manager.service.getObject(any, any)).thenAnswer((_) async {
       return instance;
     });
 
-    await debuggerController.buildVariablesTree(variable);
+    await buildVariablesTree(variable);
 
     expect(variable.children, [
       matchesVariable(name: '[0]', value: 0),
@@ -348,18 +376,21 @@ void main() {
       bytes: base64.encode(bytes.buffer.asUint8List()),
     );
 
-    final variable = Variable.create(BoundVariable(
-      name: 'test',
-      value: instance,
-      declarationTokenPos: null,
-      scopeEndTokenPos: null,
-      scopeStartTokenPos: null,
-    ));
+    final variable = Variable.create(
+      BoundVariable(
+        name: 'test',
+        value: instance,
+        declarationTokenPos: null,
+        scopeEndTokenPos: null,
+        scopeStartTokenPos: null,
+      ),
+      isolateRef,
+    );
     when(manager.service.getObject(any, any)).thenAnswer((_) async {
       return instance;
     });
 
-    await debuggerController.buildVariablesTree(variable);
+    await buildVariablesTree(variable);
 
     expect(variable.children, [
       matchesVariable(name: '[0]', value: 0),
@@ -378,17 +409,20 @@ void main() {
       bytes: base64.encode(bytes.buffer.asUint8List()),
     );
 
-    final variable = Variable.create(BoundVariable(
-      name: 'test',
-      value: instance,
-      declarationTokenPos: null,
-      scopeEndTokenPos: null,
-      scopeStartTokenPos: null,
-    ));
+    final variable = Variable.create(
+      BoundVariable(
+        name: 'test',
+        value: instance,
+        declarationTokenPos: null,
+        scopeEndTokenPos: null,
+        scopeStartTokenPos: null,
+      ),
+      isolateRef,
+    );
     when(manager.service.getObject(any, any)).thenAnswer((_) async {
       return instance;
     });
-    await debuggerController.buildVariablesTree(variable);
+    await buildVariablesTree(variable);
 
     expect(variable.children.first.displayValue,
         '[ffffffff, 00000000, ffffffff, 00000000]',
@@ -408,18 +442,21 @@ void main() {
       bytes: base64.encode(bytes.buffer.asUint8List()),
     );
 
-    final variable = Variable.create(BoundVariable(
-      name: 'test',
-      value: instance,
-      declarationTokenPos: null,
-      scopeEndTokenPos: null,
-      scopeStartTokenPos: null,
-    ));
+    final variable = Variable.create(
+      BoundVariable(
+        name: 'test',
+        value: instance,
+        declarationTokenPos: null,
+        scopeEndTokenPos: null,
+        scopeStartTokenPos: null,
+      ),
+      isolateRef,
+    );
     when(manager.service.getObject(any, any)).thenAnswer((_) async {
       return instance;
     });
 
-    await debuggerController.buildVariablesTree(variable);
+    await buildVariablesTree(variable);
 
     expect(variable.children.first.displayValue,
         '[0.000000, -232.199997, 2.330000, 9.000000]',
@@ -438,18 +475,21 @@ void main() {
       bytes: base64.encode(bytes.buffer.asUint8List()),
     );
 
-    final variable = Variable.create(BoundVariable(
-      name: 'test',
-      value: instance,
-      declarationTokenPos: null,
-      scopeEndTokenPos: null,
-      scopeStartTokenPos: null,
-    ));
+    final variable = Variable.create(
+      BoundVariable(
+        name: 'test',
+        value: instance,
+        declarationTokenPos: null,
+        scopeEndTokenPos: null,
+        scopeStartTokenPos: null,
+      ),
+      isolateRef,
+    );
     when(manager.service.getObject(any, any)).thenAnswer((_) async {
       return instance;
     });
 
-    await debuggerController.buildVariablesTree(variable);
+    await buildVariablesTree(variable);
 
     expect(variable.children.first.displayValue, '[0.000000, -1232.222000]',
         skip: kIsWeb);

@@ -13,11 +13,11 @@ import 'dart:developer';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
-
 import 'package:meta/meta.dart';
 import 'package:vm_service/vm_service.dart';
 
 import '../auto_dispose.dart';
+import '../debugger/debugger_model.dart' hide SourcePosition;
 import '../eval_on_dart_library.dart';
 import '../globals.dart';
 import 'diagnostics_node.dart';
@@ -29,18 +29,6 @@ const inspectorLibraryUriCandidates = [
   'package:flutter/src/widgets/widget_inspector.dart',
   'package:flutter_web/src/widgets/widget_inspector.dart',
 ];
-
-bool _inspectorDependenciesLoaded = false;
-
-/// This method must be called before any methods on the Inspector are used.
-Future<void> ensureInspectorServiceDependencies() async {
-  if (_inspectorDependenciesLoaded) {
-    return;
-  }
-  // TODO(jacobr): consider also loading common icons needed by the inspector
-  // to avoid flicker on icon load.
-  _inspectorDependenciesLoaded = true;
-}
 
 class RegistrableServiceExtension {
   const RegistrableServiceExtension(this.name);
@@ -88,18 +76,7 @@ class InspectorService extends DisposableController
   final EvalOnDartLibrary inspectorLibrary;
   final Set<String> supportedServiceMethods;
 
-  /// [ensureInspectorServiceDependencies] must be called before this method is
-  /// called.
-  static Future<ObjectGroup> createGroup(
-    VmService vmService,
-    String groupName,
-  ) async {
-    assert(_inspectorDependenciesLoaded);
-    return (await create(vmService)).createObjectGroup(groupName);
-  }
-
   static Future<InspectorService> create(VmService vmService) async {
-    assert(_inspectorDependenciesLoaded);
     assert(serviceManager.hasConnection);
     assert(serviceManager.service != null);
     final inspectorLibrary = EvalOnDartLibrary(
@@ -382,10 +359,8 @@ class InspectorService extends DisposableController
   /// Daemon API calls won't execute until after the current frame is done
   /// rendering.
   bool get useDaemonApi {
-    return true;
-    // TODO(jacobr): once there is a debugger, hook to it to determine whether
-    // we are suspended.
-    // return !app.isFlutterIsolateSuspended();
+    return !serviceManager
+        .isolateManager.mainIsolateDebuggerState.isPaused.value;
   }
 
   /// Use this method to write code that is backwards compatible with versions
@@ -398,8 +373,12 @@ class InspectorService extends DisposableController
     return ObjectGroup(debugName, this);
   }
 
+  bool get isDisposed => _isDisposed;
+  bool _isDisposed = false;
+
   @override
   void dispose() {
+    _isDisposed = true;
     inspectorLibrary.dispose();
     super.dispose();
   }
@@ -541,7 +520,7 @@ class InspectorService extends DisposableController
 
     final r = await vmService.callServiceExtension(
       callMethodName,
-      isolateId: inspectorLibrary.isolateId,
+      isolateId: inspectorLibrary.isolateRef.id,
       args: args,
     );
     final json = r.json;
@@ -550,6 +529,8 @@ class InspectorService extends DisposableController
     }
     return json['result'];
   }
+
+  IsolateRef get isolateRef => inspectorLibrary.isolateRef;
 
   void removeClient(InspectorServiceClient client) {
     clients.remove(client);
@@ -725,7 +706,7 @@ class ObjectGroup {
     return inspectorLibrary.addRequest(this, () async {
       final r = await inspectorService.vmService.callServiceExtension(
         extension,
-        isolateId: inspectorService.inspectorLibrary.isolateId,
+        isolateId: inspectorService.inspectorLibrary.isolateRef.id,
         args: args,
       );
       if (disposed) return null;
@@ -761,8 +742,9 @@ class ObjectGroup {
   Future<InstanceRef> invokeServiceMethodObservatoryInspectorRef(
       String methodName, InspectorInstanceRef arg) {
     return inspectorLibrary.eval(
-        "WidgetInspectorService.instance.$methodName('${arg?.id}', '$groupName')",
-        isAlive: this);
+      "WidgetInspectorService.instance.$methodName('${arg?.id}', '$groupName')",
+      isAlive: this,
+    );
   }
 
   /// Call a service method passing in an observatory instance reference.
@@ -835,9 +817,24 @@ class ObjectGroup {
   }
 
   Future<InstanceRef> toObservatoryInstanceRef(
-      InspectorInstanceRef inspectorInstanceRef) {
-    return invokeServiceMethodObservatoryInspectorRef(
-        'toObject', inspectorInstanceRef);
+      InspectorInstanceRef inspectorInstanceRef) async {
+    if (inspectorInstanceRef == null || inspectorInstanceRef.id == null) {
+      return null;
+    }
+    return await invokeServiceMethodObservatoryInspectorRef(
+      'toObject',
+      inspectorInstanceRef,
+    );
+  }
+
+  Future<InspectorInstanceRef> fromInstanceRef(InstanceRef instanceRef) async {
+    final inspectorIdRef = await inspectorLibrary.eval(
+      "WidgetInspectorService.instance.toId(obj, '$groupName')",
+      scope: {'obj': instanceRef.id},
+      isAlive: this,
+    );
+    if (inspectorIdRef is! InstanceRef) return null;
+    return InspectorInstanceRef(inspectorIdRef.valueAsString);
   }
 
   Future<Instance> getInstance(FutureOr<InstanceRef> instanceRef) async {
@@ -1063,12 +1060,14 @@ class ObjectGroup {
     }
   }
 
-  Future<void> setSelectionInspector(
+  Future<bool> setSelectionInspector(
       InspectorInstanceRef selection, bool uiAlreadyUpdated) {
     if (disposed) {
-      return Future.value();
+      return Future.value(false);
     }
-    inspectorService._trackClientSelfTriggeredSelection(selection);
+    if (uiAlreadyUpdated) {
+      inspectorService._trackClientSelfTriggeredSelection(selection);
+    }
     if (useDaemonApi) {
       return handleSetSelectionDaemon(
           invokeServiceMethodDaemonInspectorRef('setSelectionById', selection),
@@ -1081,29 +1080,90 @@ class ObjectGroup {
     }
   }
 
-  Future<void> handleSetSelectionObservatory(
-      Future<InstanceRef> setSelectionResult, bool uiAlreadyUpdated) async {
-    // TODO(jacobr): we need to cancel if another inspect request comes in while we are trying this one.
-    if (disposed) return;
-    final instanceRef = await setSelectionResult;
-    if (disposed) return;
-    handleSetSelectionHelper(
-        'true' == instanceRef?.valueAsString, uiAlreadyUpdated);
+  Future<bool> setSelection(GenericRef selection) {
+    if (disposed) {
+      return Future.value();
+    }
+    return handleSetSelectionObservatory(
+      evalOnRef(
+        "WidgetInspectorService.instance.setSelection(object, '$groupName')",
+        selection,
+      ),
+      false,
+    );
   }
 
-  void handleSetSelectionHelper(bool selectionChanged, bool uiAlreadyUpdated) {
-    if (selectionChanged && !uiAlreadyUpdated && !disposed) {
-      inspectorService.notifySelectionChanged();
+  /// Evaluate an expression where `object` referrences the [inspectorRef] or
+  /// [instanceRef] passed in.
+  ///
+  /// If both [inspectorRef] and [instanceRef] are passed in they are assumed to
+  /// reference the same object and the [inspectorRef] is used as it is longer
+  /// lived than an InstanceRef.
+  Future<InstanceRef> evalOnRef(
+    String expression,
+    GenericRef ref,
+  ) async {
+    final inspectorRef = ref.inspectorRef;
+    if (inspectorRef != null && inspectorRef.id != null) {
+      return await inspectorLibrary.eval(
+        "((object) => $expression)(WidgetInspectorService.instance.toObject('${inspectorRef?.id}'))",
+        isAlive: this,
+      );
+    }
+    final instanceRef = ref.instanceRef;
+    if (instanceRef != null) {
+      return await inspectorLibrary.eval(
+        expression,
+        isAlive: this,
+        scope: <String, String>{'object': instanceRef.id},
+      );
+    }
+    return null;
+  }
+
+  Future<bool> isInspectable(GenericRef ref) async {
+    if (disposed) {
+      return false;
+    }
+    try {
+      final result = await evalOnRef(
+        'object is Element || object is RenderObject',
+        ref,
+      );
+      if (disposed) return false;
+      return 'true' == result?.valueAsString;
+    } catch (e) {
+      // If the ref is invalid it is not inspectable.
+      return false;
     }
   }
 
-  Future<void> handleSetSelectionDaemon(
+  Future<bool> handleSetSelectionObservatory(
+      Future<InstanceRef> setSelectionResult, bool uiAlreadyUpdated) async {
+    // TODO(jacobr): we need to cancel if another inspect request comes in while we are trying this one.
+    if (disposed) return true;
+    final instanceRef = await setSelectionResult;
+    if (disposed) return true;
+    return handleSetSelectionHelper(
+      'true' == instanceRef?.valueAsString,
+      uiAlreadyUpdated,
+    );
+  }
+
+  bool handleSetSelectionHelper(bool selectionChanged, bool uiAlreadyUpdated) {
+    if (selectionChanged && !uiAlreadyUpdated && !disposed) {
+      inspectorService.notifySelectionChanged();
+    }
+    return selectionChanged && !disposed;
+  }
+
+  Future<bool> handleSetSelectionDaemon(
       Future<Object> setSelectionResult, bool uiAlreadyUpdated) async {
-    if (disposed) return;
+    if (disposed) return false;
     // TODO(jacobr): we need to cancel if another inspect request comes in while we are trying this one.
     final json = await setSelectionResult;
-    if (disposed) return;
-    handleSetSelectionHelper(json, uiAlreadyUpdated);
+    if (disposed) return false;
+    return handleSetSelectionHelper(json, uiAlreadyUpdated);
   }
 
   Future<Map<String, InstanceRef>> getEnumPropertyValues(

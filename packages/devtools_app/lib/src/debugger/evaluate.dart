@@ -6,12 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:vm_service/vm_service.dart';
 
+import '../globals.dart';
 import '../notifications.dart';
 import 'debugger_controller.dart';
 
 // TODO(devoncarew): We'll want some kind of code completion w/ eval.
-// TODO(devoncarew): We should insert eval result objects into the console as
-// expandable objects.
 
 class ExpressionEvalField extends StatefulWidget {
   const ExpressionEvalField({
@@ -93,7 +92,7 @@ class _ExpressionEvalFieldState extends State<ExpressionEvalField> {
 
     expressionText = expressionText.trim();
 
-    widget.controller.appendStdio('> $expressionText\n');
+    serviceManager.consoleService.appendStdio('> $expressionText\n');
     setState(() {
       historyPosition = -1;
       widget.controller.evalHistory.pushEvalHistory(expressionText);
@@ -102,12 +101,13 @@ class _ExpressionEvalFieldState extends State<ExpressionEvalField> {
 
     try {
       // Response is either a ErrorRef, InstanceRef, or Sentinel.
+      final isolateRef = widget.controller.isolateRef;
       final response =
           await widget.controller.evalAtCurrentFrame(expressionText);
 
       // Display the response to the user.
       if (response is InstanceRef) {
-        _emitRefToConsole(response);
+        _emitRefToConsole(response, isolateRef);
       } else {
         var value = response.toString();
 
@@ -126,11 +126,21 @@ class _ExpressionEvalFieldState extends State<ExpressionEvalField> {
   }
 
   void _emitToConsole(String text) {
-    widget.controller.appendStdio('  ${text.replaceAll('\n', '\n  ')}\n');
+    serviceManager.consoleService.appendStdio(
+        '  ${text.replaceAll('\n', '\n  ')}\n',
+        forceScrollIntoView: true);
   }
 
-  void _emitRefToConsole(InstanceRef ref) {
-    widget.controller.appendInstanceRef(ref);
+  void _emitRefToConsole(
+    InstanceRef ref,
+    IsolateRef isolate,
+  ) {
+    serviceManager.consoleService.appendInstanceRef(
+      value: ref,
+      inspectorRef: null,
+      isolate: isolate,
+      forceScrollIntoView: true,
+    );
   }
 
   @override

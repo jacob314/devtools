@@ -4,6 +4,7 @@
 
 import 'dart:async';
 import 'dart:core';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -17,8 +18,10 @@ import 'auto_dispose.dart';
 import 'config_specific/logger/logger.dart';
 import 'connected_app.dart';
 import 'core/message_bus.dart';
+import 'debugger/debugger_model.dart';
 import 'error_badge_manager.dart';
 import 'globals.dart';
+import 'inspector/inspector_service.dart';
 import 'logging/vm_service_logger.dart';
 import 'service_extensions.dart' as extensions;
 import 'service_extensions.dart';
@@ -41,9 +44,8 @@ const defaultRefreshRate = 60.0;
 // instead of Streams.
 class ServiceConnectionManager {
   ServiceConnectionManager() {
-    _isolateManager = IsolateManager();
     _serviceExtensionManager =
-        ServiceExtensionManager(_isolateManager.mainIsolate);
+        ServiceExtensionManager(isolateManager.mainIsolate);
   }
 
   final StreamController<VmServiceWrapper> _connectionAvailableController =
@@ -76,8 +78,12 @@ class ServiceConnectionManager {
   VmFlagManager get vmFlagManager => _vmFlagManager;
   final _vmFlagManager = VmFlagManager();
 
-  IsolateManager get isolateManager => _isolateManager;
-  IsolateManager _isolateManager;
+  final isolateManager = IsolateManager();
+
+  final consoleService = ConsoleService();
+
+  InspectorService get inspectorService => _inspectorService;
+  InspectorService _inspectorService;
 
   ErrorBadgeManager get errorBadgeManager => _errorBadgeManager;
   final _errorBadgeManager = ErrorBadgeManager();
@@ -165,6 +171,7 @@ class ServiceConnectionManager {
     // performing any async operations. Otherwise, we may get end up with
     // race conditions where managers cannot listen for events soon enough.
     isolateManager.vmServiceOpened(service);
+    consoleService.vmServiceOpened(service);
     serviceExtensionManager.vmServiceOpened(service, connectedApp);
     vmFlagManager.vmServiceOpened(service);
     // This needs to be called last in the above group of `vmServiceOpened`
@@ -174,6 +181,9 @@ class ServiceConnectionManager {
     if (debugLogServiceProtocolEvents) {
       serviceTrafficLogger = VmServiceTrafficLogger(service);
     }
+
+    _inspectorService?.dispose();
+    _inspectorService = null;
 
     final serviceStreamName = await service.serviceStreamName;
 
@@ -218,7 +228,7 @@ class ServiceConnectionManager {
 
     _connectedState.value = const ConnectedState(true);
 
-    await _isolateManager._initIsolates(vm.isolates);
+    await isolateManager._initIsolates(vm.isolates);
 
     final streamIds = [
       EventStreams.kDebug,
@@ -253,6 +263,10 @@ class ServiceConnectionManager {
     // `ga.setupUserApplicationDimensions()`.
     await connectedApp.initializeValues();
 
+    if (connectedApp.isFlutterAppNow) {
+      _inspectorService = await InspectorService.create(service);
+    }
+
     // Set up analytics dimensions for the connected app.
     await ga.setupUserApplicationDimensions();
 
@@ -280,7 +294,8 @@ class ServiceConnectionManager {
 
     serviceTrafficLogger?.dispose();
 
-    _isolateManager._handleVmServiceClosed();
+    isolateManager._handleVmServiceClosed();
+    consoleService._handleVmServiceClosed();
     setDeviceBusy(false);
 
     _connectedState.value = connectionState;
@@ -291,7 +306,7 @@ class ServiceConnectionManager {
   Future<void> performHotReload() async {
     await callService(
       registrations.hotReload.service,
-      isolateId: _isolateManager.selectedIsolate.id,
+      isolateId: isolateManager.selectedIsolate.id,
     );
   }
 
@@ -299,21 +314,21 @@ class ServiceConnectionManager {
   Future<void> performHotRestart() async {
     await callService(
       registrations.hotRestart.service,
-      isolateId: _isolateManager.selectedIsolate.id,
+      isolateId: isolateManager.selectedIsolate.id,
     );
   }
 
   Future<Response> get flutterVersion async {
     return await callService(
       registrations.flutterVersion.service,
-      isolateId: _isolateManager.selectedIsolate.id,
+      isolateId: isolateManager.selectedIsolate.id,
     );
   }
 
   Future<Response> get adbMemoryInfo async {
     return await callService(
       registrations.flutterMemory.service,
-      isolateId: _isolateManager.selectedIsolate?.id,
+      isolateId: isolateManager.selectedIsolate?.id,
     );
   }
 
@@ -322,7 +337,7 @@ class ServiceConnectionManager {
   Future<String> get flutterViewId async {
     final flutterViewListResponse = await service.callServiceExtension(
       registrations.flutterListViews,
-      isolateId: _isolateManager.selectedIsolate.id,
+      isolateId: isolateManager.selectedIsolate.id,
     );
     final List<dynamic> views =
         flutterViewListResponse.json['views'].cast<Map<String, dynamic>>();
@@ -361,7 +376,7 @@ class ServiceConnectionManager {
       args: <String, String>{
         'viewId': viewId,
       },
-      isolateId: _isolateManager.selectedIsolate.id,
+      isolateId: isolateManager.selectedIsolate.id,
     );
   }
 
@@ -375,7 +390,7 @@ class ServiceConnectionManager {
     final viewId = await flutterViewId;
     final displayRefreshRateResponse = await service.callServiceExtension(
       registrations.displayRefreshRate,
-      isolateId: _isolateManager.selectedIsolate.id,
+      isolateId: isolateManager.selectedIsolate.id,
       args: {'viewId': viewId},
     );
     final double fps = displayRefreshRateResponse.json['fps'];
@@ -405,8 +420,249 @@ class ServiceConnectionManager {
   }
 }
 
+/// A line in the console.
+///
+/// TODO(jacobr): support console lines that are structured error messages as
+/// well.
+class ConsoleLine {
+  factory ConsoleLine.text(
+    String text, {
+    bool forceScrollIntoView = false,
+  }) =>
+      TextConsoleLine(
+        text,
+        forceScrollIntoView: forceScrollIntoView,
+      );
+  factory ConsoleLine.variable(
+    Variable variable, {
+    bool forceScrollIntoView = false,
+  }) =>
+      VariableConsoleLine(
+        variable,
+        forceScrollIntoView: forceScrollIntoView,
+      );
+  ConsoleLine._(this.forceScrollIntoView);
+
+  // Whether this console line should be scrolled into view when it is added.
+  final bool forceScrollIntoView;
+}
+
+class TextConsoleLine extends ConsoleLine {
+  TextConsoleLine(this.text, {bool forceScrollIntoView = false})
+      : super._(forceScrollIntoView);
+  final String text;
+
+  @override
+  String toString() {
+    return text;
+  }
+}
+
+class VariableConsoleLine extends ConsoleLine {
+  VariableConsoleLine(this.variable, {bool forceScrollIntoView = false})
+      : super._(forceScrollIntoView);
+  final Variable variable;
+
+  @override
+  String toString() {
+    return variable.toString();
+  }
+}
+
+/// Source of truth for the state of the Console including both events from the
+/// VM and events emitted from other UI.
+class ConsoleService extends Disposer {
+  void appendInstanceRef({
+    String name,
+    @required InstanceRef value,
+    @required InspectorInstanceRef inspectorRef,
+    @required IsolateRef isolate,
+    bool forceScrollIntoView = false,
+  }) async {
+    final inspector = objectGroup;
+    if (inspector != null && inspectorRef == null && value != null) {
+      try {
+        inspectorRef = await inspector.fromInstanceRef(value);
+      } catch (e) {
+        // TODO(jacobr): verify it is a Sentinel exception.
+      }
+    }
+
+    _stdioTrailingNewline = false;
+    // TODO(jacobr): this is O(n) in the number of lines. Use a custom ValueListenable that notiifies on list appends instead.
+    final lines = _stdio.value.toList();
+    final variable = Variable.fromRef(
+        name: name,
+        value: value,
+        inspectorRef: inspectorRef,
+        isolateRef: isolate);
+    unawaited(buildVariablesTree(variable));
+    lines.add(ConsoleLine.variable(variable,
+        forceScrollIntoView: forceScrollIntoView));
+    _stdio.value = lines;
+  }
+
+  final _stdio = ValueNotifier<List<ConsoleLine>>([]);
+  bool _stdioTrailingNewline = false;
+
+  ObjectGroup get objectGroup {
+    final inspectorService = serviceManager.inspectorService;
+    if (_objectGroup?.inspectorService == inspectorService) {
+      return _objectGroup;
+    }
+    _objectGroup?.dispose();
+    _objectGroup = inspectorService?.createObjectGroup('console');
+    return _objectGroup;
+  }
+
+  ObjectGroup _objectGroup;
+
+  /// Clears the contents of stdio.
+  void clearStdio() {
+    _stdio.value = [];
+  }
+
+  /// Append to the stdout / stderr buffer.
+  void appendStdio(
+    String text, {
+    bool forceScrollIntoView = false,
+  }) {
+    const int kMaxLogItemsLowerBound = 5000;
+    const int kMaxLogItemsUpperBound = 5500;
+
+    // Parse out the new lines and append to the end of the existing lines.
+
+    // TODO(jacobr): this is O(n) in the number of lines. Use a custom ValueListenable that notiifies on list appends instead.
+    var lines = _stdio.value.toList();
+    final newLines = text.split('\n');
+
+    final last = lines.safeLast;
+    if (lines.isNotEmpty && !_stdioTrailingNewline && last is TextConsoleLine) {
+      lines.last = ConsoleLine.text(
+        '${last.text}${newLines.first}',
+        forceScrollIntoView: forceScrollIntoView,
+      );
+      if (newLines.length > 1) {
+        lines.addAll(newLines.sublist(1).map((text) => ConsoleLine.text(
+              text,
+              forceScrollIntoView: forceScrollIntoView,
+            )));
+      }
+    } else {
+      lines.addAll(newLines.map((text) => ConsoleLine.text(
+            text,
+            forceScrollIntoView: forceScrollIntoView,
+          )));
+    }
+
+    _stdioTrailingNewline = text.endsWith('\n');
+
+    // Don't report trailing blank lines.
+    if (lines.isNotEmpty && (last is TextConsoleLine && last.text.isEmpty)) {
+      lines = lines.sublist(0, lines.length - 1);
+    }
+
+    // For performance reasons, we drop older lines in batches, so the lines
+    // will grow to kMaxLogItemsUpperBound then truncate to
+    // kMaxLogItemsLowerBound.
+    if (lines.length > kMaxLogItemsUpperBound) {
+      lines = lines.sublist(lines.length - kMaxLogItemsLowerBound);
+    }
+
+    _stdio.value = lines;
+  }
+
+  /// Return the stdout and stderr emitted from the application.
+  ///
+  /// Note that this output might be truncated after significant output.
+  ValueListenable<List<ConsoleLine>> get stdio => _stdio;
+
+  void _handleStdoutEvent(Event event) {
+    final String text = decodeBase64(event.bytes);
+    appendStdio(text);
+  }
+
+  void _handleStderrEvent(Event event) {
+    final String text = decodeBase64(event.bytes);
+    // TODO(devoncarew): Change to reporting stdio along with information about
+    // whether the event was stdout or stderr.
+    appendStdio(text);
+  }
+
+  void vmServiceOpened(VmServiceWrapper service) {
+    cancel();
+    autoDispose(service.onDebugEvent.listen(_handleDebugEvent));
+    // TODO(jacobr): listen with event history here.
+    autoDispose(service.onStdoutEvent.listen(_handleStdoutEvent));
+    // TODO(jacobr): do we want to listen with event history here?
+    autoDispose(service.onStderrEvent.listen(_handleStderrEvent));
+  }
+
+  void _handleVmServiceClosed() {
+    cancel();
+  }
+
+  void _handleDebugEvent(Event event) async {
+    // TODO(jacobr): keep events in order by tracking the original time and
+    // sorting.
+    if (event.kind == EventKind.kInspect) {
+      final lines = _stdio.value;
+      final end = lines.length - 1;
+      const alreadySeenWindowLength = 100;
+      final start = math.max(0, end - alreadySeenWindowLength);
+      final inspector = objectGroup;
+      InspectorInstanceRef inspectorRef;
+      if (inspector != null) {
+        try {
+          inspectorRef = await inspector.fromInstanceRef(event.inspectee);
+          for (int i = end; i >= start; i--) {
+            final line = lines[i];
+            if (line is VariableConsoleLine &&
+                line.variable.ref.inspectorRef == inspectorRef) {
+              // We already have an event in the console for this object, so don't
+              // add another one. TODO(jacobr): consider removing this hack once
+              // we can disambiguate inspector selection from other inspect calls.
+              // The issue is we can see both an inspector selection call from the
+              // server and one from devtools itself.
+              return;
+            }
+          }
+        } catch (e) {
+          // Fail gracefully. TODO(jacobr) verify the error was only Sentinel
+          // returned getting the inspector ref.
+        }
+      }
+      appendInstanceRef(
+        value: event.inspectee,
+        isolate: event.isolate,
+        inspectorRef: inspectorRef,
+      );
+    }
+  }
+}
+
+class IsolateDebuggerState {
+  IsolateDebuggerState();
+
+  ValueListenable<bool> get isPaused => _isPaused;
+
+  /// Paused is null until we know whether the isolate is paused or not.
+  final _isPaused = ValueNotifier<bool>(null);
+
+  void onIsolateLoaded(Isolate isolate) {
+    if (_isPaused.value == null) {
+      if (isolate.pauseEvent != null &&
+          isolate.pauseEvent.kind != EventKind.kResume) {
+        _isPaused.value = true;
+      } else {
+        _isPaused.value = false;
+      }
+    }
+  }
+}
+
 class IsolateManager extends Disposer {
-  List<IsolateRef> _isolates = <IsolateRef>[];
+  Map<IsolateRef, IsolateDebuggerState> _isolateStates = {};
   IsolateRef _selectedIsolate;
   VmServiceWrapper _service;
 
@@ -424,7 +680,8 @@ class IsolateManager extends Disposer {
 
   List<LibraryRef> selectedIsolateLibraries;
 
-  List<IsolateRef> get isolates => List<IsolateRef>.unmodifiable(_isolates);
+  List<IsolateRef> get isolates =>
+      List<IsolateRef>.unmodifiable(_isolateStates.keys);
 
   IsolateRef get selectedIsolate => _selectedIsolate;
 
@@ -438,6 +695,18 @@ class IsolateManager extends Disposer {
   final _mainIsolate = ValueNotifier<IsolateRef>(null);
   ValueListenable<IsolateRef> get mainIsolate => _mainIsolate;
 
+  IsolateDebuggerState get mainIsolateDebuggerState {
+    return _isolateStates[_mainIsolate.value];
+  }
+
+  IsolateDebuggerState isolateDebuggerState(IsolateRef isolate) {
+    return _isolateStates[isolate];
+  }
+
+  IsolateDebuggerState get selectedIsolateState {
+    return _isolateStates[_mainIsolate.value];
+  }
+
   /// Return a unique, monotonically increasing number for this Isolate.
   int isolateIndex(IsolateRef isolateRef) {
     if (!_isolateIndexMap.containsKey(isolateRef.id)) {
@@ -446,16 +715,13 @@ class IsolateManager extends Disposer {
     return _isolateIndexMap[isolateRef.id];
   }
 
-  void selectIsolate(String isolateRefId) {
-    final IsolateRef ref = _isolates.firstWhere(
-        (IsolateRef ref) => ref.id == isolateRefId,
-        orElse: () => null);
-    _setSelectedIsolate(ref);
+  void selectIsolate(IsolateRef isolateRef) {
+    _setSelectedIsolate(isolateRef);
   }
 
   Future<void> _initIsolates(List<IsolateRef> isolates) async {
-    _isolates = isolates;
-    _isolates.forEach(isolateIndex);
+    _isolateStates = {};
+    isolates.forEach(_registerIsolate);
 
     // It is critical that the _serviceExtensionManager is already listening
     // for events indicating that new extension rpcs are registered before this
@@ -471,13 +737,28 @@ class IsolateManager extends Disposer {
     }
   }
 
+  void _registerIsolate(IsolateRef isolateRef) {
+    _isolateStates[isolateRef] = IsolateDebuggerState();
+    isolateIndex(isolateRef);
+  }
+
+  void _loadIsolateState(IsolateRef isolateRef) {
+    _service.getIsolate(isolateRef.id).then((Isolate isolate) {
+      final state = _isolateStates[isolateRef];
+      if (state != null) {
+        // Isolate might have already been closed.
+        state.onIsolateLoaded(isolate);
+      }
+    });
+  }
+
   Future<void> _handleIsolateEvent(Event event) async {
     _sendToMessageBus(event);
 
     if (event.kind == EventKind.kIsolateStart &&
         !event.isolate.isSystemIsolate) {
-      _isolates.add(event.isolate);
-      isolateIndex(event.isolate);
+      _registerIsolate(event.isolate);
+      _loadIsolateState(event.isolate);
       _isolateCreatedController.add(event.isolate);
       // TODO(jacobr): we assume the first isolate started is the main isolate
       // but that may not always be a safe assumption.
@@ -493,13 +774,14 @@ class IsolateManager extends Disposer {
         await _setSelectedIsolate(event.isolate);
       }
     } else if (event.kind == EventKind.kIsolateExit) {
-      _isolates.remove(event.isolate);
+      _isolateStates.remove(event.isolate);
       _isolateExitedController.add(event.isolate);
       if (_mainIsolate.value == event.isolate) {
         _mainIsolate.value = null;
       }
       if (_selectedIsolate == event.isolate) {
-        _selectedIsolate = _isolates.isEmpty ? null : _isolates.first;
+        _selectedIsolate =
+            _isolateStates.isEmpty ? null : _isolateStates.keys.first;
         if (_selectedIsolate == null) {
           selectedIsolateAvailable = Completer();
         }
@@ -530,6 +812,8 @@ class IsolateManager extends Disposer {
     for (IsolateRef ref in isolates) {
       if (_selectedIsolate == null) {
         final Isolate isolate = await _service.getIsolate(ref.id);
+        _isolateStates[ref].onIsolateLoaded(isolate);
+
         if (isolate.extensionRPCs != null) {
           for (String extensionName in isolate.extensionRPCs) {
             if (extensions.isFlutterExtension(extensionName)) {
@@ -566,8 +850,9 @@ class IsolateManager extends Disposer {
       } on SentinelException {
         if (_selectedIsolate == ref) {
           _selectedIsolate = null;
-          if (_isolates.isNotEmpty && _isolates.first != ref) {
-            await _setSelectedIsolate(_isolates.first);
+          final firstExistingIsolate = _isolateStates.keys.safeFirst;
+          if (firstExistingIsolate != ref) {
+            await _setSelectedIsolate(firstExistingIsolate);
           }
         }
         return;
@@ -594,7 +879,7 @@ class IsolateManager extends Disposer {
     _lastIsolateIndex = 0;
     _setSelectedIsolate(null);
     _isolateIndexMap.clear();
-    _isolates.clear();
+    _isolateStates.clear();
     _mainIsolate.value = null;
   }
 
@@ -602,8 +887,33 @@ class IsolateManager extends Disposer {
     cancel();
     _service = service;
     autoDispose(service.onIsolateEvent.listen(_handleIsolateEvent));
+    autoDispose(service.onDebugEvent.listen(_handleDebugEvent));
+
     // We don't yet known the main isolate.
     _mainIsolate.value = null;
+  }
+
+  void _handleDebugEvent(Event event) {
+    final isolate = event.isolate;
+    final isolateState = _isolateStates[isolate];
+    assert(isolateState != null);
+    if (isolateState == null) {
+      return;
+    }
+
+    switch (event.kind) {
+      case EventKind.kResume:
+        isolateState._isPaused.value = false;
+        break;
+      case EventKind.kPauseStart:
+      case EventKind.kPauseExit:
+      case EventKind.kPauseBreakpoint:
+      case EventKind.kPauseInterrupted:
+      case EventKind.kPauseException:
+      case EventKind.kPausePostRequest:
+        isolateState._isPaused.value = true;
+        break;
+    }
   }
 }
 
@@ -641,7 +951,7 @@ class ServiceExtensionManager extends Disposer {
   /// [_firstFrameEventReceived].
   final _pendingServiceExtensions = <String>{};
 
-  Map<String, List<AsyncCallback>> _callbacksOnIsolateResume = {};
+  Map<IsolateRef, List<AsyncCallback>> _callbacksOnIsolateResume = {};
 
   ConnectedApp get connectedApp => _connectedApp;
   ConnectedApp _connectedApp;
@@ -678,8 +988,8 @@ class ServiceExtensionManager extends Disposer {
 
   Future<void> _handleDebugEvent(Event event) async {
     if (event.kind == EventKind.kResume) {
-      final isolateId = event.isolate.id;
-      final callbacks = _callbacksOnIsolateResume[isolateId] ?? [];
+      final isolateRef = event.isolate;
+      final callbacks = _callbacksOnIsolateResume[isolateRef] ?? [];
       _callbacksOnIsolateResume = {};
       for (final callback in callbacks) {
         try {
@@ -897,9 +1207,7 @@ class ServiceExtensionManager extends Disposer {
     // Do not try to restore Dart IO extensions for a paused isolate.
     if (extensions.isDartIoExtension(name) &&
         isolate.pauseEvent.kind.contains('Pause')) {
-      _callbacksOnIsolateResume
-          .putIfAbsent(isolateRef.id, () => [])
-          .add(restore);
+      _callbacksOnIsolateResume.putIfAbsent(isolateRef, () => []).add(restore);
     } else {
       await restore();
     }
@@ -985,7 +1293,7 @@ class ServiceExtensionManager extends Disposer {
     if (extensions.isDartIoExtension(name) &&
         isolate.pauseEvent.kind.contains('Pause')) {
       _callbacksOnIsolateResume
-          .putIfAbsent(mainIsolate.id, () => [])
+          .putIfAbsent(mainIsolate, () => [])
           .add(callExtension);
     } else {
       await callExtension();

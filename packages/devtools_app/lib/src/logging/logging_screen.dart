@@ -101,7 +101,6 @@ class _LoggingScreenState extends State<LoggingScreenBody>
     final newController = Provider.of<LoggingController>(context);
     if (newController == controller) return;
     controller = newController;
-
     cancel();
 
     filteredLogs = controller.filteredData.value;

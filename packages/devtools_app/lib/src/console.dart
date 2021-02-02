@@ -5,9 +5,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'auto_dispose_mixin.dart';
 import 'common_widgets.dart';
-import 'debugger/debugger_controller.dart';
 import 'debugger/variables.dart';
+import 'service_manager.dart';
 import 'theme.dart';
 import 'utils.dart';
 
@@ -26,10 +27,10 @@ class Console extends StatelessWidget {
 
   final Widget title;
   final List<Widget> controls;
-  final List<ConsoleLine> lines;
+  final ValueListenable<List<ConsoleLine>> lines;
 
   @visibleForTesting
-  String get textContent => lines.join('\n');
+  String get textContent => lines.value.join('\n');
 
   @override
   Widget build(BuildContext context) {
@@ -104,40 +105,96 @@ class _ConsoleControls extends StatelessWidget {
 class _ConsoleOutput extends StatefulWidget {
   const _ConsoleOutput({
     Key key,
-    this.lines,
+    @required this.lines,
   }) : super(key: key);
 
-  final List<ConsoleLine> lines;
+  final ValueListenable<List<ConsoleLine>> lines;
 
   @override
   _ConsoleOutputState createState() => _ConsoleOutputState();
 }
 
-class _ConsoleOutputState extends State<_ConsoleOutput> {
+class _ConsoleOutputState extends State<_ConsoleOutput>
+    with AutoDisposeMixin<_ConsoleOutput> {
   // The scroll controller must survive ConsoleOutput re-renders
   // to work as intended, so it must be part of the "state".
+  //
+  // TODO(jacobr): synchronize scroll offsets so that consoles on multiple
+  // screens have the same offsets. For example, store the target first element
+  // in view and synchronize based on that.
   final ScrollController _scroll = ScrollController();
+
+  static const _scrollBarKey = Key('console-scrollbar');
+
+  List<ConsoleLine> _currentLines;
+  bool _scrollToBottom = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentLines = const [];
+    _initHelper();
+  }
 
   // Whenever the widget updates, refresh the scroll position if needed.
   @override
-  void didUpdateWidget(Widget oldWidget) {
-    if (_scroll.hasClients && _scroll.atScrollBottom) {
-      _scroll.autoScrollToBottom();
+  void didUpdateWidget(_ConsoleOutput oldWidget) {
+    if (oldWidget.lines != widget.lines) {
+      cancel();
+      _initHelper();
     }
     super.didUpdateWidget(oldWidget);
+  }
+
+  void _initHelper() {
+    addAutoDisposeListener(widget.lines, _onConsoleLinesChanged);
+    _onConsoleLinesChanged();
+  }
+
+  void _onConsoleLinesChanged() {
+    final nextLines = widget.lines.value ?? const [];
+    if (nextLines == _currentLines) return;
+
+    var forceScrollIntoView = false;
+    for (int i = _currentLines.length; i < nextLines.length; i++) {
+      if (nextLines[i].forceScrollIntoView) {
+        forceScrollIntoView = true;
+        break;
+      }
+    }
+    setState(() {
+      _currentLines = nextLines;
+    });
+
+    if (forceScrollIntoView || (_scroll.hasClients && _scroll.atScrollBottom)) {
+      _scrollToBottom = true;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
+    if (_scrollToBottom) {
+      _scrollToBottom = false;
+      WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+        if (_scroll.hasClients) {
+          _scroll.autoScrollToBottom();
+        } else {
+          // Scroll to bottom when we are back in view.
+          _scrollToBottom = true;
+        }
+      });
+    }
     return Scrollbar(
+      key: _scrollBarKey,
+      controller: _scroll,
+      isAlwaysShown: true,
       child: ListView.builder(
         padding: const EdgeInsets.all(denseSpacing),
-        itemCount: widget.lines?.length ?? 0,
+        itemCount: _currentLines.length,
         controller: _scroll,
         itemBuilder: (context, index) {
-          final line = widget.lines[index];
+          final line = _currentLines[index];
           if (line is TextConsoleLine) {
             return SelectableText.rich(
               TextSpan(

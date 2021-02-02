@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../../globals.dart';
 import '../../../theme.dart';
 import '../../../utils.dart';
 import '../../diagnostics_node.dart';
@@ -62,8 +63,7 @@ abstract class LayoutExplorerWidgetState<W extends LayoutExplorerWidget,
 
   InspectorController get inspectorController => widget.inspectorController;
 
-  InspectorService get inspectorService =>
-      inspectorController?.inspectorService;
+  InspectorService get inspectorService => serviceManager.inspectorService;
 
   RateLimiter rateLimiter;
 
@@ -252,7 +252,7 @@ abstract class LayoutExplorerWidgetState<W extends LayoutExplorerWidget,
   }
 
   void _updateObjectGroupManager() {
-    final service = inspectorController.inspectorService;
+    final service = serviceManager.inspectorService;
     if (service != objectGroupManager?.inspectorService) {
       objectGroupManager = InspectorObjectGroupManager(
         service,

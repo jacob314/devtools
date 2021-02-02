@@ -37,6 +37,7 @@ class DebuggerScreen extends Screen {
           requiresDebugBuild: true,
           title: 'Debugger',
           icon: Octicons.bug,
+          showFloatingDebuggerControls: false,
         );
 
   static const id = 'debugger';
@@ -358,35 +359,19 @@ class _DebuggerStatusState extends State<DebuggerStatus> with AutoDisposeMixin {
   }
 }
 
-class FloatingDebuggerControls extends StatefulWidget {
-  @override
-  _FloatingDebuggerControlsState createState() =>
-      _FloatingDebuggerControlsState();
-}
-
-class _FloatingDebuggerControlsState extends State<FloatingDebuggerControls>
-    with AutoDisposeMixin {
-  DebuggerController controller;
-
-  bool paused;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    controller = Provider.of<DebuggerController>(context);
-    paused = controller.isPaused.value;
-    addAutoDisposeListener(controller.isPaused, () {
-      setState(() {
-        paused = controller.isPaused.value;
-      });
-    });
-  }
-
+class FloatingDebuggerControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return AnimatedOpacity(
-      opacity: paused ? 1.0 : 0.0,
-      duration: longDuration,
+    final controller = Provider.of<DebuggerController>(context);
+    return ValueListenableBuilder(
+      valueListenable: controller.isPaused,
+      builder: (context, paused, child) {
+        return AnimatedOpacity(
+          opacity: paused ? 1.0 : 0.0,
+          duration: longDuration,
+          child: child,
+        );
+      },
       child: Container(
         color: devtoolsWarning,
         height: defaultButtonHeight,
@@ -410,7 +395,7 @@ class _FloatingDebuggerControlsState extends State<FloatingDebuggerControls>
             DevToolsTooltip(
               tooltip: 'Resume',
               child: TextButton(
-                onPressed: controller.resume,
+                onPressed: controller?.resume,
                 child: const Icon(
                   Codicons.debugContinue,
                   color: Colors.green,
@@ -421,7 +406,7 @@ class _FloatingDebuggerControlsState extends State<FloatingDebuggerControls>
             DevToolsTooltip(
               tooltip: 'Step over',
               child: TextButton(
-                onPressed: controller.stepOver,
+                onPressed: controller?.stepOver,
                 child: const Icon(
                   Codicons.debugStepOver,
                   color: Colors.black,

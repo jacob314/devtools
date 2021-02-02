@@ -26,6 +26,7 @@ abstract class Screen {
     this.requiresDebugBuild = false,
     this.requiresVmDeveloperMode = false,
     this.worksOffline = false,
+    this.showFloatingDebuggerControls = true,
   });
 
   const Screen.conditional({
@@ -35,6 +36,7 @@ abstract class Screen {
     bool requiresDebugBuild = false,
     bool requiresVmDeveloperMode = false,
     bool worksOffline = false,
+    bool showFloatingDebuggerControls = true,
     String title,
     IconData icon,
     Key tabKey,
@@ -45,10 +47,17 @@ abstract class Screen {
           requiresDebugBuild: requiresDebugBuild,
           requiresVmDeveloperMode: requiresVmDeveloperMode,
           worksOffline: worksOffline,
+          showFloatingDebuggerControls: showFloatingDebuggerControls,
           title: title,
           icon: icon,
           tabKey: tabKey,
         );
+
+  /// Whether to show floating debugger controls if the app is paused.
+  ///
+  /// If your page is negatively impacted by the app being paused you should
+  /// show debugger controls.
+  final bool showFloatingDebuggerControls;
 
   final String screenId;
 

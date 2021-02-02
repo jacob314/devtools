@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 
 import '../common_widgets.dart';
 import '../console.dart';
-import '../utils.dart';
 import 'debugger_controller.dart';
 import 'evaluate.dart';
 
@@ -30,33 +29,8 @@ class DebuggerConsole extends StatefulWidget {
 }
 
 class _DebuggerConsoleState extends State<DebuggerConsole> {
-  var _lines = <ConsoleLine>[];
-
-  @override
-  void initState() {
-    super.initState();
-
-    _lines = widget.controller.stdio.value;
-    widget.controller.stdio.addListener(_onStdioChanged);
-  }
-
-  void _onStdioChanged() {
-    setState(() {
-      _lines = widget.controller.stdio.value;
-    });
-  }
-
-  @override
-  void dispose() {
-    widget.controller.stdio.removeListener(_onStdioChanged);
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final numLines = _lines.length;
-    final disabled = numLines == 0;
-
     return OutlineDecoration(
       child: Column(
         children: [
@@ -68,19 +42,18 @@ class _DebuggerConsoleState extends State<DebuggerConsole> {
                 needsTopBorder: false,
                 actions: [
                   CopyToClipboardControl(
-                    dataProvider: disabled ? null : () => _lines.join('\n'),
-                    successMessage:
-                        'Copied $numLines ${pluralize('line', numLines)}.',
+                    dataProvider: () =>
+                        widget.controller.stdio.value?.join('\n') ?? '',
                     buttonKey: DebuggerConsole.copyToClipboardButtonKey,
                   ),
                   DeleteControl(
                     buttonKey: DebuggerConsole.clearStdioButtonKey,
                     tooltip: 'Clear console output',
-                    onPressed: disabled ? null : widget.controller.clearStdio,
+                    onPressed: widget.controller.clearStdio,
                   ),
                 ],
               ),
-              lines: _lines,
+              lines: widget.controller.stdio,
             ),
           ),
           ExpressionEvalField(controller: widget.controller),

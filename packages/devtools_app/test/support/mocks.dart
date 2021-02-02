@@ -10,6 +10,7 @@ import 'package:devtools_app/src/connected_app.dart';
 import 'package:devtools_app/src/debugger/debugger_controller.dart';
 import 'package:devtools_app/src/error_badge_manager.dart';
 import 'package:devtools_app/src/listenable.dart';
+import 'package:devtools_app/src/inspector/inspector_service.dart';
 import 'package:devtools_app/src/logging/logging_controller.dart';
 import 'package:devtools_app/src/memory/memory_controller.dart'
     as flutter_memory;
@@ -29,6 +30,8 @@ import 'package:devtools_testing/support/cpu_profile_test_data.dart';
 import 'package:flutter/foundation.dart';
 import 'package:mockito/mockito.dart';
 import 'package:vm_service/vm_service.dart';
+
+import '../inspector_screen_test.dart';
 
 class FakeServiceManager extends Fake implements ServiceConnectionManager {
   FakeServiceManager({
@@ -92,6 +95,9 @@ class FakeServiceManager extends Fake implements ServiceConnectionManager {
 
   @override
   final ErrorBadgeManager errorBadgeManager = MockErrorBadgeManager();
+
+  @override
+  final InspectorService inspectorService = MockInspectorService();
 
   @override
   VM get vm => _mockVM;

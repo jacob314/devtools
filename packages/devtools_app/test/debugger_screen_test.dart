@@ -603,114 +603,143 @@ String _ansiCodesOutput() {
   return sb.toString();
 }
 
+final isolateRef = IsolateRef(
+  id: '433',
+  number: '1',
+  name: 'my-isolate',
+  isSystemIsolate: false,
+);
+
 final testVariables = [
-  Variable.create(BoundVariable(
-    name: 'Root 1',
-    value: InstanceRef(
-      id: 'ref1',
-      kind: InstanceKind.kList,
-      classRef: ClassRef(
-        name: '_GrowableList',
-        id: 'ref2',
+  Variable.create(
+    BoundVariable(
+      name: 'Root 1',
+      value: InstanceRef(
+        id: 'ref1',
+        kind: InstanceKind.kList,
+        classRef: ClassRef(
+          name: '_GrowableList',
+          id: 'ref2',
+        ),
+        length: 2,
       ),
-      length: 2,
+      declarationTokenPos: null,
+      scopeEndTokenPos: null,
+      scopeStartTokenPos: null,
     ),
-    declarationTokenPos: null,
-    scopeEndTokenPos: null,
-    scopeStartTokenPos: null,
-  ))
-    ..addAllChildren([
-      Variable.create(BoundVariable(
-        name: '0',
-        value: InstanceRef(
-          id: 'ref3',
-          kind: InstanceKind.kInt,
-          classRef: ClassRef(name: 'Integer', id: 'ref4'),
-          valueAsString: '3',
-          valueAsStringIsTruncated: false,
+    isolateRef,
+  )..addAllChildren([
+      Variable.create(
+        BoundVariable(
+          name: '0',
+          value: InstanceRef(
+            id: 'ref3',
+            kind: InstanceKind.kInt,
+            classRef: ClassRef(name: 'Integer', id: 'ref4'),
+            valueAsString: '3',
+            valueAsStringIsTruncated: false,
+          ),
+          declarationTokenPos: null,
+          scopeEndTokenPos: null,
+          scopeStartTokenPos: null,
         ),
-        declarationTokenPos: null,
-        scopeEndTokenPos: null,
-        scopeStartTokenPos: null,
-      )),
-      Variable.create(BoundVariable(
-        name: '1',
-        value: InstanceRef(
-          id: 'ref5',
-          kind: InstanceKind.kInt,
-          classRef: ClassRef(name: 'Integer', id: 'ref6'),
-          valueAsString: '4',
-          valueAsStringIsTruncated: false,
+        isolateRef,
+      ),
+      Variable.create(
+        BoundVariable(
+          name: '1',
+          value: InstanceRef(
+            id: 'ref5',
+            kind: InstanceKind.kInt,
+            classRef: ClassRef(name: 'Integer', id: 'ref6'),
+            valueAsString: '4',
+            valueAsStringIsTruncated: false,
+          ),
+          declarationTokenPos: null,
+          scopeEndTokenPos: null,
+          scopeStartTokenPos: null,
         ),
-        declarationTokenPos: null,
-        scopeEndTokenPos: null,
-        scopeStartTokenPos: null,
-      )),
+        isolateRef,
+      ),
     ]),
-  Variable.create(BoundVariable(
-    name: 'Root 2',
-    value: InstanceRef(
-      id: 'ref7',
-      kind: InstanceKind.kMap,
-      classRef: ClassRef(name: '_InternalLinkedHashmap', id: 'ref8'),
-      length: 2,
+  Variable.create(
+    BoundVariable(
+      name: 'Root 2',
+      value: InstanceRef(
+        id: 'ref7',
+        kind: InstanceKind.kMap,
+        classRef: ClassRef(name: '_InternalLinkedHashmap', id: 'ref8'),
+        length: 2,
+      ),
+      declarationTokenPos: null,
+      scopeEndTokenPos: null,
+      scopeStartTokenPos: null,
     ),
-    declarationTokenPos: null,
-    scopeEndTokenPos: null,
-    scopeStartTokenPos: null,
-  ))
-    ..addAllChildren([
-      Variable.create(BoundVariable(
-        name: "['key1']",
-        value: InstanceRef(
-          id: 'ref9',
-          kind: InstanceKind.kDouble,
-          classRef: ClassRef(name: 'Double', id: 'ref10'),
-          valueAsString: '1.0',
-          valueAsStringIsTruncated: false,
+    isolateRef,
+  )..addAllChildren([
+      Variable.create(
+        BoundVariable(
+          name: "['key1']",
+          value: InstanceRef(
+            id: 'ref9',
+            kind: InstanceKind.kDouble,
+            classRef: ClassRef(name: 'Double', id: 'ref10'),
+            valueAsString: '1.0',
+            valueAsStringIsTruncated: false,
+          ),
+          declarationTokenPos: null,
+          scopeEndTokenPos: null,
+          scopeStartTokenPos: null,
         ),
-        declarationTokenPos: null,
-        scopeEndTokenPos: null,
-        scopeStartTokenPos: null,
-      )),
-      Variable.create(BoundVariable(
-        name: "['key2']",
-        value: InstanceRef(
-          id: 'ref11',
-          kind: InstanceKind.kDouble,
-          classRef: ClassRef(name: 'Double', id: 'ref12'),
-          valueAsString: '1.1',
-          valueAsStringIsTruncated: false,
+        isolateRef,
+      ),
+      Variable.create(
+        BoundVariable(
+          name: "['key2']",
+          value: InstanceRef(
+            id: 'ref11',
+            kind: InstanceKind.kDouble,
+            classRef: ClassRef(name: 'Double', id: 'ref12'),
+            valueAsString: '1.1',
+            valueAsStringIsTruncated: false,
+          ),
+          declarationTokenPos: null,
+          scopeEndTokenPos: null,
+          scopeStartTokenPos: null,
         ),
-        declarationTokenPos: null,
-        scopeEndTokenPos: null,
-        scopeStartTokenPos: null,
-      )),
+        isolateRef,
+      ),
     ]),
-  Variable.create(BoundVariable(
-    name: 'Root 3',
-    value: InstanceRef(
-      id: 'ref13',
-      kind: InstanceKind.kString,
-      classRef: ClassRef(name: 'String', id: 'ref14'),
-      valueAsString: 'test str',
-      valueAsStringIsTruncated: true,
+  Variable.create(
+    BoundVariable(
+      name: 'Root 3',
+      value: InstanceRef(
+        id: 'ref13',
+        kind: InstanceKind.kString,
+        classRef: ClassRef(name: 'String', id: 'ref14'),
+        valueAsString: 'test str',
+        valueAsStringIsTruncated: true,
+      ),
+      declarationTokenPos: null,
+      scopeEndTokenPos: null,
+      scopeStartTokenPos: null,
     ),
-    declarationTokenPos: null,
-    scopeEndTokenPos: null,
-    scopeStartTokenPos: null,
-  )),
-  Variable.create(BoundVariable(
-    name: 'Root 4',
-    value: InstanceRef(
-      id: 'ref15',
-      kind: InstanceKind.kBool,
-      classRef: ClassRef(name: 'Boolean', id: 'ref16'),
-      valueAsString: 'true',
-      valueAsStringIsTruncated: false,
+    isolateRef,
+  ),
+  Variable.create(
+    BoundVariable(
+      name: 'Root 4',
+      value: InstanceRef(
+        id: 'ref15',
+        kind: InstanceKind.kBool,
+        classRef: ClassRef(name: 'Boolean', id: 'ref16'),
+        valueAsString: 'true',
+        valueAsStringIsTruncated: false,
+      ),
+      declarationTokenPos: null,
+      scopeEndTokenPos: null,
+      scopeStartTokenPos: null,
     ),
-    declarationTokenPos: null,
-    scopeEndTokenPos: null,
-    scopeStartTokenPos: null,
-  )),
+    isolateRef,
+  ),
 ];

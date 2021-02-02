@@ -331,7 +331,7 @@ class DevToolsScaffoldState extends State<DevToolsScaffold>
                     ),
                     if (serviceManager.hasConnection &&
                         !offlineMode &&
-                        _currentScreen.screenId != DebuggerScreen.id)
+                        _currentScreen.showFloatingDebuggerControls)
                       Container(
                         alignment: Alignment.topCenter,
                         child: FloatingDebuggerControls(),
@@ -446,7 +446,11 @@ class DevToolsScaffoldState extends State<DevToolsScaffold>
 }
 
 class SimpleScreen extends Screen {
-  const SimpleScreen(this.child) : super(id);
+  const SimpleScreen(this.child)
+      : super(
+          id,
+          showFloatingDebuggerControls: false,
+        );
 
   static const id = 'simple';
 

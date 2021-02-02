@@ -18,24 +18,23 @@ class EvalOnDartLibrary {
   EvalOnDartLibrary(
     Iterable<String> candidateLibraryNames,
     this.service, {
-    String isolateId,
+    IsolateRef isolateRef,
   }) : _candidateLibraryNames = Set.from(candidateLibraryNames) {
     _libraryRef = Completer<LibraryRef>();
 
     // For evals in tests, we will pass the isolateId into the constructor.
-    if (isolateId != null) {
-      _init(isolateId, false);
+    if (isolateRef != null) {
+      _init(isolateRef, false);
     } else {
       selectedIsolateStreamSubscription = serviceManager.isolateManager
           .getSelectedIsolate((IsolateRef isolate) {
-        final String id = isolate?.id;
         _initializeComplete = null;
-        _init(id, isolate == null);
+        _init(isolate, isolate == null);
       });
     }
   }
 
-  Future<void> _init(String isolateId, bool isIsolateNull) async {
+  Future<void> _init(IsolateRef isolateRef, bool isIsolateNull) async {
     await _initializeComplete;
 
     if (_libraryRef.isCompleted) {
@@ -43,7 +42,7 @@ class EvalOnDartLibrary {
     }
 
     if (!isIsolateNull) {
-      _initializeComplete = _initialize(isolateId);
+      _initializeComplete = _initialize(isolateRef);
     }
   }
 
@@ -60,8 +59,8 @@ class EvalOnDartLibrary {
   Future<void> _initializeComplete;
   StreamSubscription selectedIsolateStreamSubscription;
 
-  String get isolateId => _isolateId;
-  String _isolateId;
+  IsolateRef get isolateRef => _isolateRef;
+  IsolateRef _isolateRef;
 
   Future<LibraryRef> get libraryRef => _libraryRef.future;
   Completer allPendingRequestsDone;
@@ -69,11 +68,11 @@ class EvalOnDartLibrary {
   Isolate get isolate => _isolate;
   Isolate _isolate;
 
-  Future<void> _initialize(String isolateId) async {
-    _isolateId = isolateId;
+  Future<void> _initialize(IsolateRef isolateId) async {
+    _isolateRef = isolateId;
 
     try {
-      final Isolate isolate = await service.getIsolate(_isolateId);
+      final Isolate isolate = await service.getIsolate(_isolateRef.id);
       _isolate = isolate;
       if (isolate == null || _libraryRef.isCompleted) {
         // Nothing to do here.
@@ -119,7 +118,7 @@ class EvalOnDartLibrary {
       }
       if (libraryRef == null) return null;
       final result = await service.evaluate(
-        _isolateId,
+        _isolateRef.id,
         libraryRef.id,
         expression,
         scope: scope,
@@ -251,7 +250,7 @@ class EvalOnDartLibrary {
   }) {
     return addRequest<T>(isAlive, () async {
       final T value = await service.getObject(
-        _isolateId,
+        _isolateRef.id,
         instance.id,
         offset: offset,
         count: count,
@@ -261,7 +260,7 @@ class EvalOnDartLibrary {
   }
 
   Future<String> retrieveFullValueAsString(InstanceRef stringRef) {
-    return service.retrieveFullStringValue(_isolateId, stringRef);
+    return service.retrieveFullStringValue(_isolateRef.id, stringRef);
   }
 }
 

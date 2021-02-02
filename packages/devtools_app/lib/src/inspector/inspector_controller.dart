@@ -19,6 +19,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:meta/meta.dart';
+import 'package:pedantic/pedantic.dart';
 import 'package:vm_service/vm_service.dart';
 
 import '../auto_dispose.dart';
@@ -68,7 +69,6 @@ class InspectorController extends DisposableController
     with AutoDisposeControllerMixin
     implements InspectorServiceClient {
   InspectorController({
-    @required this.inspectorService,
     @required this.inspectorTree,
     InspectorTreeController detailsTree,
     @required this.treeType,
@@ -76,9 +76,10 @@ class InspectorController extends DisposableController
     this.isSummaryTree = true,
     this.onExpandCollapseSupported,
     this.onLayoutExplorerSupported,
-  })  : _treeGroups = InspectorObjectGroupManager(inspectorService, 'tree'),
-        _selectionGroups =
-            InspectorObjectGroupManager(inspectorService, 'selection') {
+  })  : _treeGroups = InspectorObjectGroupManager(
+            serviceManager.inspectorService, 'tree'),
+        _selectionGroups = InspectorObjectGroupManager(
+            serviceManager.inspectorService, 'selection') {
     _refreshRateLimiter = RateLimiter(refreshFramesPerSecond, refresh);
 
     assert(inspectorTree != null);
@@ -93,7 +94,6 @@ class InspectorController extends DisposableController
     );
     if (isSummaryTree) {
       details = InspectorController(
-        inspectorService: inspectorService,
         inspectorTree: detailsTree,
         treeType: treeType,
         parent: this,
@@ -173,8 +173,6 @@ class InspectorController extends DisposableController
 
   InspectorTreeController inspectorTree;
   final FlutterTreeType treeType;
-
-  final InspectorService inspectorService;
 
   StreamSubscription<IsolateRef> flutterIsolateSubscription;
   IsolateRef _activeIsolate;
@@ -373,6 +371,8 @@ class InspectorController extends DisposableController
     inspectorService.addClient(this);
     maybeLoadUI();
   }
+
+  InspectorService get inspectorService => serviceManager.inspectorService;
 
   List<String> get rootDirectories =>
       _rootDirectories ?? parent.rootDirectories;
@@ -794,6 +794,30 @@ class InspectorController extends DisposableController
     }
     if (node != null) {
       setSelectedNode(node);
+      final valueRef = node.diagnostic.valueRef;
+      if (valueRef != null) {
+        // TODO(jacobr): need to make sure the value
+        final isolateRef = inspectorService.isolateRef;
+        Future<void> addRef() async {
+          final inspectorService = await node.diagnostic.inspectorService;
+          if (inspectorService == null) return;
+          final instanceRef =
+              await inspectorService?.toObservatoryInstanceRef(valueRef);
+          if (instanceRef != null) {
+            serviceManager.consoleService.appendInstanceRef(
+              name: node.diagnostic.name ?? node.diagnostic.description,
+              value: instanceRef,
+              inspectorRef: valueRef,
+              isolate: isolateRef,
+              // TODO(jacobr): consider whether we really want to force
+              // scrolling into view in this case.
+              forceScrollIntoView: true,
+            );
+          }
+        }
+
+        unawaited(addRef());
+      }
 
       // Don't reroot if the selected value is already visible in the details tree.
       final bool maybeReroot = isSummaryTree &&

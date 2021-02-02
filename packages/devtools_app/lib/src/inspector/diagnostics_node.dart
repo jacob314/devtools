@@ -783,6 +783,8 @@ class InspectorSourceLocation {
   }
 }
 
+// TODO(jacobr): rename this class or merge with SourcePosition class in
+// debugger_model.dart
 class SourcePosition {
   const SourcePosition({this.file, this.line, this.column});
 

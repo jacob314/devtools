@@ -158,9 +158,7 @@ class StatusLine extends StatelessWidget {
         return DropdownButtonHideUnderline(
           child: DropdownButton<IsolateRef>(
             value: snapshot.data,
-            onChanged: (IsolateRef ref) {
-              isolateManager.selectIsolate(ref?.id);
-            },
+            onChanged: isolateManager.selectIsolate,
             isDense: true,
             items: isolates.map((IsolateRef ref) {
               return DropdownMenuItem<IsolateRef>(
