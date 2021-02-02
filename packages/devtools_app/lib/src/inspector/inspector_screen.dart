@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:vm_service/vm_service.dart' hide Stack;
 
 import '../analytics/analytics_stub.dart'
@@ -12,6 +13,7 @@ import '../auto_dispose_mixin.dart';
 import '../blocking_action_mixin.dart';
 import '../common_widgets.dart';
 import '../connected_app.dart';
+import '../debugger/debugger_controller.dart';
 import '../globals.dart';
 import '../octicons.dart';
 import '../screen.dart';
@@ -65,10 +67,14 @@ class InspectorScreenBodyState extends State<InspectorScreenBody>
   bool get enableButtons =>
       actionInProgress == false && connectionInProgress == false;
 
+  DebuggerController _debuggerController;
   @override
-  void initState() {
-    super.initState();
-    ga.screen(InspectorScreen.id);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final debuggerController = Provider.of<DebuggerController>(context);
+    if (_debuggerController == debuggerController) return;
+    cancel();
+    _debuggerController = debuggerController;
     autoDispose(
         serviceManager.onConnectionAvailable.listen(_handleConnectionStart));
     if (serviceManager.hasConnection) {
@@ -76,6 +82,12 @@ class InspectorScreenBodyState extends State<InspectorScreenBody>
     }
     autoDispose(
         serviceManager.onConnectionClosed.listen(_handleConnectionStop));
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    ga.screen(InspectorScreen.id);
   }
 
   @override
@@ -234,11 +246,21 @@ class InspectorScreenBodyState extends State<InspectorScreenBody>
       connectionInProgress = true;
     });
 
+    if (inspectorService != null) {
+      inspectorService.dispose();
+      inspectorService = null;
+    }
+    if (inspectorController != null) {
+      inspectorController.dispose();
+      inspectorController = null;
+    }
+    summaryTreeController = null;
+    detailsTreeController = null;
+
     try {
-      // Init the inspector service, or return null.
-      await ensureInspectorServiceDependencies();
       inspectorService =
-          await InspectorService.create(service).catchError((e) => null);
+          await InspectorService.create(service, _debuggerController)
+              .catchError((e) => null);
     } finally {
       setState(() {
         connectionInProgress = false;

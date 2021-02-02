@@ -4,7 +4,6 @@
 
 import 'dart:convert';
 
-import 'package:devtools_app/src/debugger/debugger_controller.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +13,7 @@ import '../analytics/analytics_stub.dart'
 import '../auto_dispose_mixin.dart';
 import '../common_widgets.dart';
 import '../console.dart';
+import '../debugger/debugger_controller.dart';
 import '../octicons.dart';
 import '../screen.dart';
 import '../split.dart';
@@ -102,6 +102,8 @@ class _LoggingScreenState extends State<LoggingScreenBody>
     final newController = Provider.of<LoggingController>(context);
     if (newController == controller) return;
     controller = newController;
+    final debuggerController = Provider.of<DebuggerController>(context);
+    newController.initDebuggerController(debuggerController);
 
     cancel();
 

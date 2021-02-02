@@ -13,11 +13,11 @@ import 'dart:developer';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
-
 import 'package:meta/meta.dart';
 import 'package:vm_service/vm_service.dart';
 
 import '../auto_dispose.dart';
+import '../debugger/debugger_controller.dart';
 import '../eval_on_dart_library.dart';
 import '../globals.dart';
 import 'diagnostics_node.dart';
@@ -31,16 +31,6 @@ const inspectorLibraryUriCandidates = [
 ];
 
 bool _inspectorDependenciesLoaded = false;
-
-/// This method must be called before any methods on the Inspector are used.
-Future<void> ensureInspectorServiceDependencies() async {
-  if (_inspectorDependenciesLoaded) {
-    return;
-  }
-  // TODO(jacobr): consider also loading common icons needed by the inspector
-  // to avoid flicker on icon load.
-  _inspectorDependenciesLoaded = true;
-}
 
 class RegistrableServiceExtension {
   const RegistrableServiceExtension(this.name);
@@ -67,6 +57,7 @@ class InspectorService extends DisposableController
     this.vmService,
     this.inspectorLibrary,
     this.supportedServiceMethods,
+    this.debuggerController,
   ) : clients = {} {
     // Note: We do not need to listen to event history here because the
     // inspector uses a separate API to get the current inspector selection.
@@ -87,18 +78,10 @@ class InspectorService extends DisposableController
   final Set<InspectorServiceClient> clients;
   final EvalOnDartLibrary inspectorLibrary;
   final Set<String> supportedServiceMethods;
+  final DebuggerController debuggerController;
 
-  /// [ensureInspectorServiceDependencies] must be called before this method is
-  /// called.
-  static Future<ObjectGroup> createGroup(
-    VmService vmService,
-    String groupName,
-  ) async {
-    assert(_inspectorDependenciesLoaded);
-    return (await create(vmService)).createObjectGroup(groupName);
-  }
-
-  static Future<InspectorService> create(VmService vmService) async {
+  static Future<InspectorService> create(
+      VmService vmService, DebuggerController debuggerController) async {
     assert(_inspectorDependenciesLoaded);
     assert(serviceManager.hasConnection);
     assert(serviceManager.service != null);
@@ -135,6 +118,7 @@ class InspectorService extends DisposableController
       vmService,
       inspectorLibrary,
       supportedServiceMethods,
+      debuggerController,
     );
   }
 
@@ -382,10 +366,7 @@ class InspectorService extends DisposableController
   /// Daemon API calls won't execute until after the current frame is done
   /// rendering.
   bool get useDaemonApi {
-    return true;
-    // TODO(jacobr): once there is a debugger, hook to it to determine whether
-    // we are suspended.
-    // return !app.isFlutterIsolateSuspended();
+    return !debuggerController.isPaused.value;
   }
 
   /// Use this method to write code that is backwards compatible with versions

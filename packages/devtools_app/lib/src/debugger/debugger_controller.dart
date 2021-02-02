@@ -475,6 +475,10 @@ class DebuggerController extends DisposableController
         });
 
         break;
+      case EventKind.kInspect:
+        appendInstanceRef(event.inspectee);
+        break;
+
       case EventKind.kBreakpointRemoved:
         final breakpoint = event.breakpoint;
 

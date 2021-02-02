@@ -4,6 +4,7 @@
 
 import 'dart:io';
 
+import 'package:devtools_app/src/debugger/debugger_controller.dart';
 import 'package:devtools_app/src/globals.dart';
 import 'package:devtools_app/src/inspector/inspector_screen.dart';
 import 'package:flutter/material.dart';
@@ -34,12 +35,8 @@ void main() async {
 
   InspectorService inspectorService;
 
-  env.afterNewSetup = () async {
-    await ensureInspectorServiceDependencies();
-  };
-
   env.afterEverySetup = () async {
-    inspectorService = await InspectorService.create(env.service);
+    inspectorService = await InspectorService.create(env.service, DebuggerController());
     if (env.reuseTestEnvironment) {
       // Ensure the previous test did not set the selection on the device.
       // TODO(jacobr): add a proper method to WidgetInspectorService that does

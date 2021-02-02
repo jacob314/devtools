@@ -19,6 +19,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:meta/meta.dart';
+import 'package:pedantic/pedantic.dart';
 import 'package:vm_service/vm_service.dart';
 
 import '../auto_dispose.dart';
@@ -753,6 +754,19 @@ class InspectorController extends DisposableController
     }
     if (node != null) {
       setSelectedNode(node);
+      final valueRef = node.diagnostic.valueRef;
+      if (valueRef != null) {
+        // TODO(jacobr): need to make sure
+        Future<void> addRef() async {
+          final instanceRef = await (await node.diagnostic.inspectorService)
+              ?.toObservatoryInstanceRef(valueRef);
+          if (instanceRef != null) {
+            inspectorService.debuggerController.appendInstanceRef(instanceRef);
+          }
+        }
+
+        unawaited(addRef());
+      }
 
       // Don't reroot if the selected value is already visible in the details tree.
       final bool maybeReroot = isSummaryTree &&

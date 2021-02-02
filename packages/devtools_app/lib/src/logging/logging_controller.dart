@@ -16,6 +16,7 @@ import 'package:vm_service/vm_service.dart';
 import '../auto_dispose.dart';
 import '../config_specific/logger/logger.dart' as logger;
 import '../core/message_bus.dart';
+import '../debugger/debugger_controller.dart';
 import '../globals.dart';
 import '../inspector/diagnostics_node.dart';
 import '../inspector/inspector_service.dart';
@@ -162,7 +163,9 @@ class LoggingController extends DisposableController
         SearchControllerMixin<LogData>,
         FilterControllerMixin<LogData>,
         AutoDisposeControllerMixin {
-  LoggingController({this.inspectorService}) {
+  LoggingController({
+    this.inspectorService,
+  }) {
     autoDispose(
         serviceManager.onConnectionAvailable.listen(_handleConnectionStart));
     if (serviceManager.hasConnection) {
@@ -194,6 +197,7 @@ class LoggingController extends DisposableController
   @visibleForTesting
   InspectorService inspectorService;
 
+  DebuggerController _debuggerController;
   List<LogData> data = <LogData>[];
 
   final _selectedLog = ValueNotifier<LogData>(null);
@@ -276,17 +280,20 @@ class LoggingController extends DisposableController
     autoDispose(
         service.onExtensionEventWithHistory.listen(_handleExtensionEvent));
 
-    if (inspectorService == null) {
-      await ensureInspectorServiceDependencies();
-
-      inspectorService = await InspectorService.create(service).catchError(
-          (e) => null,
-          test: (e) => e is FlutterInspectorLibraryNotFound);
-    }
+    assert(_debuggerController != null);
+    inspectorService ??= await InspectorService.create(
+      service,
+      _debuggerController,
+    ).catchError((e) => null,
+        test: (e) => e is FlutterInspectorLibraryNotFound);
 
     if (inspectorService != null) {
       objectGroup = inspectorService.createObjectGroup('console-group');
     }
+  }
+
+  void initDebuggerController(DebuggerController debuggerController) {
+    _debuggerController = debuggerController;
   }
 
   void _handleExtensionEvent(Event e) async {
