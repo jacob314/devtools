@@ -17,12 +17,15 @@ import 'common_widgets.dart';
 import 'config_specific/drag_and_drop/drag_and_drop.dart';
 import 'config_specific/ide_theme/ide_theme.dart';
 import 'config_specific/import_export/import_export.dart';
+import 'debugger/console.dart';
+import 'debugger/debugger_controller.dart';
 import 'debugger/debugger_screen.dart';
 import 'framework_controller.dart';
 import 'globals.dart';
 import 'notifications.dart';
 import 'routing.dart';
 import 'screen.dart';
+import 'split.dart';
 import 'status_line.dart';
 import 'theme.dart';
 
@@ -106,6 +109,31 @@ class DevToolsScaffold extends StatefulWidget {
 
   @override
   State<StatefulWidget> createState() => DevToolsScaffoldState();
+}
+
+class DevToolsShortcuts extends StatelessWidget {
+  const DevToolsShortcuts({
+    Key key,
+    @required this.child,
+  }) : super(key: key);
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Shortcuts(
+      shortcuts: <LogicalKeySet, Intent>{
+        focusLibraryFilterKeySet:
+            FocusLibraryFilterIntent(Provider.of<DebuggerController>(context)),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          FocusLibraryFilterIntent: FocusLibraryFilterAction(),
+        },
+        child: child,
+      ),
+    );
+  }
 }
 
 class DevToolsScaffoldState extends State<DevToolsScaffold>
@@ -304,6 +332,21 @@ class DevToolsScaffoldState extends State<DevToolsScaffold>
         ),
     ];
 
+    final content = Stack(
+      children: [
+        TabBarView(
+          physics: defaultTabBarViewPhysics,
+          controller: _tabController,
+          children: tabBodies,
+        ),
+        if (serviceManager.hasConnection &&
+            _currentScreen.showFloatingDebuggerControls)
+          Container(
+            alignment: Alignment.topCenter,
+            child: FloatingDebuggerControls(),
+          ),
+      ],
+    );
     final title = widget.title ?? generateDevToolsTitle();
     final theme = Theme.of(context);
     return Provider<BannerMessagesController>(

@@ -22,12 +22,8 @@ import '../theme.dart';
 import '../ui/icons.dart';
 import 'breakpoints.dart';
 import 'call_stack.dart';
-import 'codeview.dart';
-import 'console.dart';
 import 'controls.dart';
 import 'debugger_controller.dart';
-import 'debugger_model.dart';
-import 'scripts.dart';
 import 'variables.dart';
 
 class DebuggerScreen extends Screen {
@@ -38,6 +34,7 @@ class DebuggerScreen extends Screen {
           title: 'Debugger',
           icon: Octicons.bug,
           showFloatingDebuggerControls: false,
+          showConsole: true,
         );
 
   static const id = 'debugger';
@@ -62,9 +59,6 @@ class DebuggerScreen extends Screen {
 class DebuggerScreenBody extends StatefulWidget {
   const DebuggerScreenBody();
 
-  static final codeViewKey = GlobalKey(debugLabel: 'codeViewKey');
-  static final scriptViewKey = GlobalKey(debugLabel: 'scriptViewKey');
-
   @override
   DebuggerScreenBodyState createState() => DebuggerScreenBodyState();
 }
@@ -76,12 +70,10 @@ class DebuggerScreenBodyState extends State<DebuggerScreenBody>
   static const breakpointsTitle = 'Breakpoints';
 
   DebuggerController controller;
-  FocusNode _libraryFilterFocusNode;
 
   @override
   void initState() {
     super.initState();
-    _libraryFilterFocusNode = FocusNode();
     ga.screen(DebuggerScreen.id);
   }
 
@@ -96,112 +88,26 @@ class DebuggerScreenBodyState extends State<DebuggerScreenBody>
 
   @override
   void dispose() {
-    _libraryFilterFocusNode.dispose();
     super.dispose();
-  }
-
-  void _onLocationSelected(ScriptLocation location) {
-    if (location != null) {
-      controller.showScriptLocation(location);
-    }
-  }
-
-  Future<void> _toggleBreakpoint(ScriptRef script, int line) async {
-    final bp = controller.breakpointsWithLocation.value.firstWhere((bp) {
-      return bp.scriptRef == script && bp.line == line;
-    }, orElse: () => null);
-
-    if (bp != null) {
-      await controller.removeBreakpoint(bp.breakpoint);
-    } else {
-      try {
-        await controller.addBreakpoint(script.id, line);
-      } catch (_) {
-        // ignore errors setting breakpoints
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final codeView = ValueListenableBuilder(
-      valueListenable: controller.currentScriptRef,
-      builder: (context, scriptRef, _) {
-        return CodeView(
-          key: DebuggerScreenBody.codeViewKey,
-          controller: controller,
-          scriptRef: scriptRef,
-          onSelected: _toggleBreakpoint,
-        );
-      },
-    );
-
-    final codeArea = ValueListenableBuilder(
-      valueListenable: controller.librariesVisible,
-      builder: (context, visible, _) {
-        if (visible) {
-          // Focus the filter text field when the ScriptPicker opens.
-          _libraryFilterFocusNode.requestFocus();
-
-          // TODO(devoncarew): Animate this opening and closing.
-          return Split(
-            axis: Axis.horizontal,
-            initialFractions: const [0.70, 0.30],
-            children: [
-              codeView,
-              ValueListenableBuilder(
-                valueListenable: controller.sortedScripts,
-                builder: (context, scripts, _) {
-                  return ScriptPicker(
-                    key: DebuggerScreenBody.scriptViewKey,
-                    controller: controller,
-                    scripts: scripts,
-                    onSelected: _onLocationSelected,
-                    libraryFilterFocusNode: _libraryFilterFocusNode,
-                  );
-                },
-              ),
-            ],
-          );
-        } else {
-          return codeView;
-        }
-      },
-    );
-
-    return Shortcuts(
-      shortcuts: <LogicalKeySet, Intent>{
-        focusLibraryFilterKeySet:
-            FocusLibraryFilterIntent(_libraryFilterFocusNode, controller),
-      },
-      child: Actions(
-        actions: <Type, Action<Intent>>{
-          FocusLibraryFilterIntent: FocusLibraryFilterAction(),
-        },
-        child: Split(
-          axis: Axis.horizontal,
-          initialFractions: const [0.25, 0.75],
+    return Split(
+      axis: Axis.horizontal,
+      initialFractions: const [0.25, 0.75],
+      children: [
+        OutlineDecoration(child: debuggerPanes()),
+        Column(
           children: [
-            OutlineDecoration(child: debuggerPanes()),
-            Column(
-              children: [
-                const DebuggingControls(),
-                const SizedBox(height: denseRowSpacing),
-                Expanded(
-                  child: Split(
-                    axis: Axis.vertical,
-                    initialFractions: const [0.72, 0.28],
-                    children: [
-                      codeArea,
-                      DebuggerConsole(controller: controller),
-                    ],
-                  ),
-                ),
-              ],
+            const DebuggingControls(),
+            const SizedBox(height: denseRowSpacing),
+            Expanded(
+              child: CodeArea(),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 
@@ -267,12 +173,12 @@ final LogicalKeySet focusLibraryFilterKeySet = LogicalKeySet(
 
 class FocusLibraryFilterIntent extends Intent {
   const FocusLibraryFilterIntent(
-    this.focusNode,
+//    this.focusNode,
     this.debuggerController,
-  )   : assert(debuggerController != null),
-        assert(focusNode != null);
+  ) : assert(debuggerController != null);
+  //  assert(focusNode != null);
 
-  final FocusNode focusNode;
+  // final FocusNode focusNode;
   final DebuggerController debuggerController;
 }
 

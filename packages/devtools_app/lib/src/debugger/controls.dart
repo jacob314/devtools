@@ -9,8 +9,10 @@ import 'package:vm_service/vm_service.dart';
 
 import '../auto_dispose_mixin.dart';
 import '../common_widgets.dart';
+import '../split.dart';
 import '../theme.dart';
 import '../ui/label.dart';
+import 'codeview.dart';
 import 'debugger_controller.dart';
 import 'scripts.dart';
 
@@ -50,7 +52,7 @@ class _DebuggingControlsState extends State<DebuggingControls>
           const SizedBox(width: denseSpacing),
           _breakOnExceptionsControl(),
           const Expanded(child: SizedBox(width: denseSpacing)),
-          _librariesButton(),
+          LibrariesButton(),
         ],
       ),
     );
@@ -122,8 +124,12 @@ class _DebuggingControlsState extends State<DebuggingControls>
       ),
     );
   }
+}
 
-  Widget _librariesButton() {
+class LibrariesButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final controller = Provider.of<DebuggerController>(context);
     return ValueListenableBuilder(
       valueListenable: controller.librariesVisible,
       builder: (context, visible, _) {
@@ -137,6 +143,70 @@ class _DebuggingControlsState extends State<DebuggingControls>
             ),
           ),
         );
+      },
+    );
+  }
+}
+
+class CodeArea extends StatefulWidget {
+  @override
+  _CodeAreaState createState() => _CodeAreaState();
+}
+
+class _CodeAreaState extends State<CodeArea> {
+  FocusNode _libraryFilterFocusNode;
+
+  static final scriptViewKey = GlobalKey(debugLabel: 'scriptViewKey');
+
+  @override
+  void initState() {
+    super.initState();
+    _libraryFilterFocusNode = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _libraryFilterFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = Provider.of<DebuggerController>(context);
+    return ValueListenableBuilder(
+      valueListenable: controller.librariesVisible,
+      builder: (context, visible, _) {
+        if (visible) {
+          // Focus the filter text field when the ScriptPicker opens.
+          _libraryFilterFocusNode.requestFocus();
+
+          // TODO(devoncarew): Animate this opening and closing.
+          return Split(
+            axis: Axis.horizontal,
+            initialFractions: const [0.70, 0.30],
+            children: [
+              ActiveCodeView(),
+              ValueListenableBuilder(
+                valueListenable: controller.sortedScripts,
+                builder: (context, scripts, _) {
+                  return ScriptPicker(
+                    key: scriptViewKey,
+                    controller: controller,
+                    scripts: scripts,
+                    onSelected: (location) {
+                      if (location != null) {
+                        controller.showScriptLocation(location);
+                      }
+                    },
+                    libraryFilterFocusNode: _libraryFilterFocusNode,
+                  );
+                },
+              ),
+            ],
+          );
+        } else {
+          return ActiveCodeView();
+        }
       },
     );
   }

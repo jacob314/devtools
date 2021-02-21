@@ -725,3 +725,24 @@ class _LineItemState extends State<LineItem> {
         ),
       );
 }
+
+class ActiveCodeView extends StatelessWidget {
+  static final codeViewKey = GlobalKey(debugLabel: 'codeViewKey');
+  static final scriptViewKey = GlobalKey(debugLabel: 'scriptViewKey');
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = Provider.of<DebuggerController>(context);
+    return ValueListenableBuilder(
+      valueListenable: controller.currentScriptRef,
+      builder: (context, scriptRef, _) {
+        return CodeView(
+          key: codeViewKey,
+          controller: controller,
+          scriptRef: scriptRef,
+          onSelected: controller.toggleBreakpoint,
+        );
+      },
+    );
+  }
+}

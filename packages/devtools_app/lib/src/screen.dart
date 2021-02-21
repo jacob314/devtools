@@ -27,6 +27,7 @@ abstract class Screen {
     this.requiresVmDeveloperMode = false,
     this.worksOffline = false,
     this.showFloatingDebuggerControls = true,
+    this.showConsole = false,
   });
 
   const Screen.conditional({
@@ -37,6 +38,7 @@ abstract class Screen {
     bool requiresVmDeveloperMode = false,
     bool worksOffline = false,
     bool showFloatingDebuggerControls = true,
+    bool showConsole = false,
     String title,
     IconData icon,
     Key tabKey,
@@ -48,6 +50,7 @@ abstract class Screen {
           requiresVmDeveloperMode: requiresVmDeveloperMode,
           worksOffline: worksOffline,
           showFloatingDebuggerControls: showFloatingDebuggerControls,
+          showConsole: showConsole,
           title: title,
           icon: icon,
           tabKey: tabKey,
@@ -58,6 +61,9 @@ abstract class Screen {
   /// If your page is negatively impacted by the app being paused you should
   /// show debugger controls.
   final bool showFloatingDebuggerControls;
+
+  /// Whether to show the console for this screen.
+  final bool showConsole;
 
   final String screenId;
 

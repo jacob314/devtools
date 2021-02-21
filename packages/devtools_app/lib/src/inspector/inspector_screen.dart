@@ -6,7 +6,6 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:vm_service/vm_service.dart' hide Stack;
 
 import '../analytics/analytics_stub.dart'
@@ -16,8 +15,6 @@ import '../auto_dispose_mixin.dart';
 import '../blocking_action_mixin.dart';
 import '../common_widgets.dart';
 import '../connected_app.dart';
-import '../debugger/console.dart';
-import '../debugger/debugger_controller.dart';
 import '../error_badge_manager.dart';
 import '../globals.dart';
 import '../screen.dart';
@@ -39,6 +36,7 @@ class InspectorScreen extends Screen {
           requiresDebugBuild: true,
           title: 'Flutter Inspector',
           icon: Octicons.deviceMobile,
+          showConsole: true,
         );
 
   static const id = 'inspector';
@@ -158,16 +156,7 @@ class InspectorScreenBodyState extends State<InspectorScreenBody>
         ),
         const SizedBox(height: denseRowSpacing),
         Expanded(
-          child: Split(
-            axis: Axis.vertical,
-            initialFractions: const [0.8, 0.2],
-            children: [
-              widgetTrees,
-              DebuggerConsole(
-                controller: Provider.of<DebuggerController>(context),
-              ),
-            ],
-          ),
+          child: widgetTrees,
         ),
       ],
     );

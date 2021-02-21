@@ -33,7 +33,6 @@ void main() async {
   );
 
   InspectorService inspectorService;
-// XXX set globals for debuggercontroller
   env.afterEverySetup = () async {
     inspectorService = await InspectorService.create(env.service);
     if (env.reuseTestEnvironment) {

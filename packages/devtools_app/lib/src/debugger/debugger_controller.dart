@@ -60,9 +60,62 @@ class VariableConsoleLine extends ConsoleLine {
 /// Responsible for managing the debug state of the app.
 class DebuggerController extends DisposableController
     with AutoDisposeControllerMixin {
+  StreamSubscription _connectionAvailabeSubscription;
   // `initialSwitchToIsolate` can be set to false for tests to skip the logic
   // in `switchToIsolate`.
-  DebuggerController({bool initialSwitchToIsolate = true}) {
+  DebuggerController({this.initialSwitchToIsolate = true}) {
+    _connectionAvailabeSubscription =
+        serviceManager.onConnectionAvailable.listen(_handleConnectionAvailable);
+    _scriptHistoryListener = () {
+      _showScriptLocation(ScriptLocation(scriptsHistory.currentScript));
+    };
+    scriptsHistory.addListener(_scriptHistoryListener);
+
+    if (_service != null) {
+      initialize();
+    }
+  }
+
+  /// Method to call after the vm service shuts down.
+  void onServiceShutdown() {
+    _clearCaches();
+
+    _hasTruncatedFrames.value = false;
+    _getStackOperation?.cancel();
+    _getStackOperation = null;
+    // It would be nice to not clear the script history but it is currently
+    // coupled to ScriptRef objects.
+    scriptsHistory.clear();
+    _isPaused.value = false;
+    _resuming.value = false;
+    _lastEvent = null;
+    _currentScriptRef.value = null;
+    _scriptLocation.value = null;
+    _uriToScriptMap.clear();
+    _stackFramesWithLocation.value = [];
+    _selectedStackFrame.value = null;
+    _variables.value = [];
+    _sortedScripts.value = [];
+    _breakpoints.value = [];
+    _breakpointsWithLocation.value = [];
+    _selectedBreakpoint.value = null;
+    _librariesVisible.value = false;
+    isolateRef = null;
+  }
+
+  VmServiceWrapper _lastService;
+
+  void _handleConnectionAvailable(VmServiceWrapper service) {
+    if (service == _lastService) return;
+    _lastService = service;
+    onServiceShutdown();
+    if (service != null) {
+      // TODO(jacobr): handle when a new app is connected correctly.
+      initialize();
+    }
+  }
+
+  void initialize() {
     if (initialSwitchToIsolate) {
       switchToIsolate(serviceManager.isolateManager.selectedIsolate);
     }
@@ -71,12 +124,9 @@ class DebuggerController extends DisposableController
         .listen(switchToIsolate));
     autoDispose(_service.onDebugEvent.listen(_handleDebugEvent));
     autoDispose(_service.onIsolateEvent.listen(_handleIsolateEvent));
-
-    _scriptHistoryListener = () {
-      _showScriptLocation(ScriptLocation(scriptsHistory.currentScript));
-    };
-    scriptsHistory.addListener(_scriptHistoryListener);
   }
+
+  final bool initialSwitchToIsolate;
 
   IsolateDebuggerState get isolateDebuggerState =>
       serviceManager.isolateManager.isolateDebuggerState(isolateRef);
@@ -181,17 +231,23 @@ class DebuggerController extends DisposableController
     _librariesVisible.value = !_librariesVisible.value;
   }
 
-  ValueListenable<List<ConsoleLine>> get stdio =>
-      serviceManager.consoleService.stdio;
-
   IsolateRef isolateRef;
 
-  /// Clears the contents of stdio.
-  void clearStdio() {
-    serviceManager.consoleService?.clearStdio();
-  }
+  Future<void> toggleBreakpoint(ScriptRef script, int line) async {
+    final bp = breakpointsWithLocation.value.firstWhere((bp) {
+      return bp.scriptRef == script && bp.line == line;
+    }, orElse: () => null);
 
-  final EvalHistory evalHistory = EvalHistory();
+    if (bp != null) {
+      await removeBreakpoint(bp.breakpoint);
+    } else {
+      try {
+        await addBreakpoint(script.id, line);
+      } catch (_) {
+        // ignore errors setting breakpoints
+      }
+    }
+  }
 
   void switchToIsolate(IsolateRef ref) async {
     isolateRef = ref;
@@ -628,7 +684,7 @@ class DebuggerController extends DisposableController
     _scriptCache.clear();
     _lastEvent = null;
     _breakPositionsMap.clear();
-    clearStdio();
+    // We could clear stdout when we switch isolates.
     _uriToScriptMap.clear();
   }
 
@@ -882,6 +938,15 @@ class ScriptsHistory extends ChangeNotifier
   int _historyIndex = -1;
 
   final _openedScripts = <ScriptRef>{};
+
+  void clear() {
+    // TODO(jacobr): it would be nice to maintain script history between debug
+    // sessions but that would currently be difficult to do.
+    _historyIndex = -1;
+    _history.clear();
+    _openedScripts.clear();
+    notifyListeners();
+  }
 
   bool get hasPrevious {
     return _history.isNotEmpty && _historyIndex > 0;

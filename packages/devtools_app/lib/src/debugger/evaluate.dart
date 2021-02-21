@@ -4,6 +4,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:vm_service/vm_service.dart';
 
 import '../globals.dart';
@@ -13,11 +14,7 @@ import 'debugger_controller.dart';
 // TODO(devoncarew): We'll want some kind of code completion w/ eval.
 
 class ExpressionEvalField extends StatefulWidget {
-  const ExpressionEvalField({
-    this.controller,
-  });
-
-  final DebuggerController controller;
+  const ExpressionEvalField();
 
   @override
   _ExpressionEvalFieldState createState() => _ExpressionEvalFieldState();
@@ -28,10 +25,14 @@ class _ExpressionEvalFieldState extends State<ExpressionEvalField> {
   FocusNode textFocus;
   int historyPosition = -1;
 
+  EvalHistory evalHistory;
+
   @override
   void initState() {
     super.initState();
 
+    // TODO(jacobr): consider moving this to a ConsoleController.
+    evalHistory = EvalHistory();
     textController = TextEditingController();
     textFocus = FocusNode();
   }
@@ -84,7 +85,8 @@ class _ExpressionEvalFieldState extends State<ExpressionEvalField> {
     textFocus.requestFocus();
 
     // Don't try to eval if we're not paused.
-    if (!widget.controller.isPaused.value) {
+    if (!serviceManager
+        .isolateManager.mainIsolateDebuggerState.isPaused.value) {
       Notifications.of(context)
           .push('Application must be paused to support expression evaluation.');
       return;
@@ -95,15 +97,16 @@ class _ExpressionEvalFieldState extends State<ExpressionEvalField> {
     serviceManager.consoleService.appendStdio('> $expressionText\n');
     setState(() {
       historyPosition = -1;
-      widget.controller.evalHistory.pushEvalHistory(expressionText);
+      evalHistory.pushEvalHistory(expressionText);
     });
     textController.clear();
 
     try {
       // Response is either a ErrorRef, InstanceRef, or Sentinel.
-      final isolateRef = widget.controller.isolateRef;
-      final response =
-          await widget.controller.evalAtCurrentFrame(expressionText);
+      final controller =
+          Provider.of<DebuggerController>(context, listen: false);
+      final isolateRef = controller.isolateRef;
+      final response = await controller.evalAtCurrentFrame(expressionText);
 
       // Display the response to the user.
       if (response is InstanceRef) {
@@ -151,7 +154,6 @@ class _ExpressionEvalFieldState extends State<ExpressionEvalField> {
   }
 
   void _historyNavUp() {
-    final evalHistory = widget.controller.evalHistory;
     if (!evalHistory.canNavigateUp) {
       return;
     }
@@ -168,7 +170,6 @@ class _ExpressionEvalFieldState extends State<ExpressionEvalField> {
   }
 
   void _historyNavDown() {
-    final evalHistory = widget.controller.evalHistory;
     if (!evalHistory.canNavigateDown) {
       return;
     }

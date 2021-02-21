@@ -62,8 +62,8 @@ void main() {
           .thenReturn(ValueNotifier(null));
       when(debuggerController.hasTruncatedFrames)
           .thenReturn(ValueNotifier(false));
-      when(debuggerController.stdio)
-          .thenReturn(ValueNotifier([ConsoleLine.text('')]));
+//      when(debuggerController.stdio)
+//          .thenReturn(ValueNotifier([ConsoleLine.text('')]));
       when(debuggerController.scriptLocation).thenReturn(ValueNotifier(null));
       when(debuggerController.exceptionPauseMode)
           .thenReturn(ValueNotifier('Unhandled'));
@@ -76,8 +76,8 @@ void main() {
     });
 
     testWidgets('has Console / stdio area', (WidgetTester tester) async {
-      when(debuggerController.stdio)
-          .thenReturn(ValueNotifier([ConsoleLine.text('test stdio')]));
+      serviceManager.consoleService..clearStdio();
+      serviceManager.consoleService.appendStdio('test stdio');
 
       await pumpDebuggerScreen(tester, debuggerController);
 
@@ -89,8 +89,8 @@ void main() {
 
     testWidgets('Console area shows processed ansi text',
         (WidgetTester tester) async {
-      when(debuggerController.stdio)
-          .thenReturn(ValueNotifier([ConsoleLine.text(_ansiCodesOutput())]));
+      serviceManager.consoleService..clearStdio();
+      serviceManager.consoleService.appendStdio(_ansiCodesOutput());
 
       await pumpDebuggerScreen(tester, debuggerController);
 
@@ -116,7 +116,7 @@ void main() {
     group('ConsoleControls', () {
       testWidgets('Console Controls are rendered disabled when stdio is empty',
           (WidgetTester tester) async {
-        when(debuggerController.stdio).thenReturn(ValueNotifier([]));
+        serviceManager.consoleService..clearStdio();
 
         await pumpDebuggerScreen(tester, debuggerController);
 
@@ -132,8 +132,8 @@ void main() {
 
       testWidgets('Tapping the Console Clear button clears stdio.',
           (WidgetTester tester) async {
-        when(debuggerController.stdio)
-            .thenReturn(ValueNotifier([ConsoleLine.text(_ansiCodesOutput())]));
+        serviceManager.consoleService.clearStdio();
+        serviceManager.consoleService.appendStdio(_ansiCodesOutput());
 
         await pumpDebuggerScreen(tester, debuggerController);
 
@@ -142,7 +142,7 @@ void main() {
 
         await tester.tap(clearButton);
 
-        verify(debuggerController.clearStdio());
+        expect(serviceManager.consoleService.stdio.value, isEmpty);
       });
 
       group('Clipboard', () {
@@ -180,8 +180,6 @@ void main() {
         testWidgets(
             'Tapping the Copy to Clipboard button attempts to copy stdio to clipboard.',
             (WidgetTester tester) async {
-          when(debuggerController.stdio).thenReturn(ValueNotifier(_stdio));
-
           await pumpDebuggerScreen(tester, debuggerController);
 
           final copyButton =
@@ -253,7 +251,7 @@ void main() {
           .thenReturn(ValueNotifier(breakpointsWithLocation));
 
       when(debuggerController.sortedScripts).thenReturn(ValueNotifier([]));
-      when(debuggerController.stdio).thenReturn(ValueNotifier([]));
+      serviceManager.consoleService..clearStdio();
       when(debuggerController.scriptLocation).thenReturn(ValueNotifier(null));
 
       await pumpDebuggerScreen(tester, debuggerController);
