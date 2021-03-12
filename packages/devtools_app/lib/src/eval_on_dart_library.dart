@@ -10,7 +10,6 @@ import 'package:meta/meta.dart';
 import 'package:vm_service/vm_service.dart';
 
 import 'config_specific/logger/logger.dart';
-import 'globals.dart';
 import 'inspector/inspector_service.dart';
 import 'vm_service_wrapper.dart';
 
@@ -18,20 +17,13 @@ class EvalOnDartLibrary {
   EvalOnDartLibrary(
     Iterable<String> candidateLibraryNames,
     this.service, {
-    IsolateRef isolateRef,
+    @required IsolateRef isolateRef,
   }) : _candidateLibraryNames = Set.from(candidateLibraryNames) {
     _libraryRef = Completer<LibraryRef>();
 
     // For evals in tests, we will pass the isolateId into the constructor.
-    if (isolateRef != null) {
-      _init(isolateRef, false);
-    } else {
-      selectedIsolateStreamSubscription = serviceManager.isolateManager
-          .getSelectedIsolate((IsolateRef isolate) {
-        _initializeComplete = null;
-        _init(isolate, isolate == null);
-      });
-    }
+    assert(isolateRef != null);
+    _init(isolateRef, false);
   }
 
   Future<void> _init(IsolateRef isolateRef, bool isIsolateNull) async {

@@ -140,7 +140,7 @@ class _ExpressionEvalFieldState extends State<ExpressionEvalField> {
   ) {
     serviceManager.consoleService.appendInstanceRef(
       value: ref,
-      inspectorRef: null,
+      diagnostic: null,
       isolate: isolate,
       forceScrollIntoView: true,
     );

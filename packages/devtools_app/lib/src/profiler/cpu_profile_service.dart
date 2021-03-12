@@ -17,7 +17,7 @@ class CpuProfilerService {
     @required int extentMicros,
   }) async {
     return await serviceManager.service.getCpuProfileTimeline(
-      serviceManager.isolateManager.selectedIsolate.id,
+      serviceManager.isolateManager.selectedIsolate.value.id,
       startMicros,
       extentMicros,
     );
@@ -31,8 +31,8 @@ class CpuProfilerService {
       serviceManager.vmFlagManager.flag(vm_flags.profilePeriod);
 
   Future clearCpuSamples() {
-    return serviceManager.service
-        .clearCpuSamples(serviceManager.isolateManager.selectedIsolate.id);
+    return serviceManager.service.clearCpuSamples(
+        serviceManager.isolateManager.selectedIsolate.value.id);
   }
 
   Future<dynamic> setProfilePeriod(String value) {

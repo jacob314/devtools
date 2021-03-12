@@ -491,17 +491,16 @@ class FakeVmService extends Fake implements VmServiceWrapper {
 
 class FakeIsolateManager extends Fake implements IsolateManager {
   @override
-  IsolateRef get selectedIsolate => IsolateRef.parse({'id': 'fake_isolate_id'});
+  ValueListenable<IsolateRef> get selectedIsolate => _selectedIsolate;
+  final _selectedIsolate =
+      ValueNotifier(IsolateRef.parse({'id': 'fake_isolate_id'}));
 
   @override
-  Stream<IsolateRef> get onSelectedIsolateChanged => const Stream.empty();
+  ValueListenable<List<IsolateRef>> get isolates {
+    return _isolates ??= ValueNotifier([_selectedIsolate.value]);
+  }
 
-  @override
-  Completer<bool> get selectedIsolateAvailable =>
-      Completer<bool>()..complete(true);
-
-  @override
-  List<IsolateRef> get isolates => [];
+  ValueNotifier<List<IsolateRef>> _isolates;
 }
 
 class MockServiceManager extends Mock implements ServiceConnectionManager {}

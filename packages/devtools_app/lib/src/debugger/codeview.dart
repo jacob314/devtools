@@ -611,9 +611,14 @@ class _LineItemState extends State<LineItem> {
       );
       if (word != '') {
         try {
-          final response = await _debuggerController.evalAtCurrentFrame(word);
-          final variable = Variable.fromRef(response);
-          await _debuggerController.buildVariablesTree(variable);
+          final InstanceRef response =
+              await _debuggerController.evalAtCurrentFrame(word);
+          final variable = Variable.fromRef(
+            value: response,
+            isolateRef: _debuggerController.isolateRef,
+            diagnostic: null,
+          );
+          await buildVariablesTree(variable);
           _hoverCard = HoverCard(
             contents: Material(
               child: ExpandableVariable(

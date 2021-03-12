@@ -1069,3 +1069,17 @@ String prettyTimestamp(
   );
   return DateFormat.Hms().format(timestampDT); // HH:mm:ss
 }
+
+Future<T> whenValueNonNull<T>(ValueListenable<T> listenable) {
+  if (listenable.value != null) return Future.value(listenable.value);
+  final completer = Completer<T>();
+  void listener() {
+    final value = listenable.value;
+    if (value != null) {
+      completer.complete(value);
+    }
+    listenable.removeListener(listener);
+  }
+  listenable.addListener(listener);
+  return completer.future;
+}

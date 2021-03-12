@@ -61,12 +61,6 @@ class InspectorService extends DisposableController
     autoDispose(
         vmService.onExtensionEvent.listen(onExtensionVmServiceRecieved));
     autoDispose(vmService.onDebugEvent.listen(onDebugVmServiceReceived));
-
-    autoDispose(serviceManager.isolateManager
-        .getSelectedIsolate((IsolateRef flutterIsolate) {
-      // Any time we have a new isolate it means the previous isolate stopped.
-      _onIsolateStopped();
-    }));
   }
 
   static int nextGroupId = 0;
@@ -79,9 +73,11 @@ class InspectorService extends DisposableController
   static Future<InspectorService> create(VmService vmService) async {
     assert(serviceManager.hasConnection);
     assert(serviceManager.service != null);
+    final mainIsolate = serviceManager.isolateManager.mainIsolate.value;
     final inspectorLibrary = EvalOnDartLibrary(
       inspectorLibraryUriCandidates,
       vmService,
+      isolateRef: mainIsolate,
     );
 
     final libraryRef = await inspectorLibrary.libraryRef.catchError(
@@ -1103,7 +1099,7 @@ class ObjectGroup {
     String expression,
     GenericRef ref,
   ) async {
-    final inspectorRef = ref.inspectorRef;
+    final inspectorRef = ref.diagnostic.valueRef;
     if (inspectorRef != null && inspectorRef.id != null) {
       return await inspectorLibrary.eval(
         "((object) => $expression)(WidgetInspectorService.instance.toObject('${inspectorRef?.id}'))",

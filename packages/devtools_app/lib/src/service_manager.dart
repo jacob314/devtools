@@ -21,6 +21,7 @@ import 'core/message_bus.dart';
 import 'debugger/debugger_model.dart';
 import 'error_badge_manager.dart';
 import 'globals.dart';
+import 'inspector/diagnostics_node.dart';
 import 'inspector/inspector_service.dart';
 import 'logging/vm_service_logger.dart';
 import 'service_extensions.dart' as extensions;
@@ -144,6 +145,7 @@ class ServiceConnectionManager {
     if (registered.isEmpty) {
       throw Exception('There are no registered methods for service "$name"');
     }
+    assert(isolateId != null);
     return service.callMethod(
       registered.first,
       isolateId: isolateId,
@@ -306,7 +308,7 @@ class ServiceConnectionManager {
   Future<void> performHotReload() async {
     await callService(
       registrations.hotReload.service,
-      isolateId: isolateManager.selectedIsolate.id,
+      isolateId: isolateManager.selectedIsolate.value.id,
     );
   }
 
@@ -314,21 +316,21 @@ class ServiceConnectionManager {
   Future<void> performHotRestart() async {
     await callService(
       registrations.hotRestart.service,
-      isolateId: isolateManager.selectedIsolate.id,
+      isolateId: isolateManager.selectedIsolate.value.id,
     );
   }
 
   Future<Response> get flutterVersion async {
     return await callService(
       registrations.flutterVersion.service,
-      isolateId: isolateManager.selectedIsolate.id,
+      isolateId: isolateManager.selectedIsolate.value.id,
     );
   }
 
   Future<Response> get adbMemoryInfo async {
     return await callService(
       registrations.flutterMemory.service,
-      isolateId: isolateManager.selectedIsolate?.id,
+      isolateId: isolateManager.selectedIsolate.value.id,
     );
   }
 
@@ -337,7 +339,7 @@ class ServiceConnectionManager {
   Future<String> get flutterViewId async {
     final flutterViewListResponse = await service.callServiceExtension(
       registrations.flutterListViews,
-      isolateId: isolateManager.selectedIsolate.id,
+      isolateId: isolateManager.selectedIsolate.value.id,
     );
     final List<dynamic> views =
         flutterViewListResponse.json['views'].cast<Map<String, dynamic>>();
@@ -376,7 +378,7 @@ class ServiceConnectionManager {
       args: <String, String>{
         'viewId': viewId,
       },
-      isolateId: isolateManager.selectedIsolate.id,
+      isolateId: isolateManager.selectedIsolate.value.id,
     );
   }
 
@@ -390,7 +392,7 @@ class ServiceConnectionManager {
     final viewId = await flutterViewId;
     final displayRefreshRateResponse = await service.callServiceExtension(
       registrations.displayRefreshRate,
-      isolateId: isolateManager.selectedIsolate.id,
+      isolateId: isolateManager.selectedIsolate.value.id,
       args: {'viewId': viewId},
     );
     final double fps = displayRefreshRateResponse.json['fps'];
@@ -406,8 +408,8 @@ class ServiceConnectionManager {
 
   bool libraryUriAvailableNow(String uri) {
     assert(_serviceAvailable.isCompleted);
-    assert(isolateManager.selectedIsolateAvailable.isCompleted);
-    return isolateManager.selectedIsolateLibraries
+    assert(serviceManager.isolateManager.mainIsolate.value != null);
+    return isolateManager.mainIsolateLibraries
         .map((ref) => ref.uri)
         .toList()
         .any((u) => u.startsWith(uri));
@@ -415,7 +417,7 @@ class ServiceConnectionManager {
 
   Future<bool> libraryUriAvailable(String uri) async {
     assert(_serviceAvailable.isCompleted);
-    await isolateManager.selectedIsolateAvailable.future;
+    await whenValueNonNull(isolateManager.selectedIsolate);
     return libraryUriAvailableNow(uri);
   }
 }
@@ -475,27 +477,15 @@ class ConsoleService extends Disposer {
   void appendInstanceRef({
     String name,
     @required InstanceRef value,
-    @required InspectorInstanceRef inspectorRef,
+    @required RemoteDiagnosticsNode diagnostic,
     @required IsolateRef isolate,
     bool forceScrollIntoView = false,
   }) async {
-    final inspector = objectGroup;
-    if (inspector != null && inspectorRef == null && value != null) {
-      try {
-        inspectorRef = await inspector.fromInstanceRef(value);
-      } catch (e) {
-        // TODO(jacobr): verify it is a Sentinel exception.
-      }
-    }
-
     _stdioTrailingNewline = false;
     // TODO(jacobr): this is O(n) in the number of lines. Use a custom ValueListenable that notiifies on list appends instead.
     final lines = _stdio.value.toList();
     final variable = Variable.fromRef(
-        name: name,
-        value: value,
-        inspectorRef: inspectorRef,
-        isolateRef: isolate);
+        name: name, value: value, diagnostic: diagnostic, isolateRef: isolate);
     unawaited(buildVariablesTree(variable));
     lines.add(ConsoleLine.variable(variable,
         forceScrollIntoView: forceScrollIntoView));
@@ -618,7 +608,7 @@ class ConsoleService extends Disposer {
           for (int i = end; i >= start; i--) {
             final line = lines[i];
             if (line is VariableConsoleLine &&
-                line.variable.ref.inspectorRef == inspectorRef) {
+                line.variable.ref.diagnostic?.valueRef == inspectorRef) {
               // We already have an event in the console for this object, so don't
               // add another one. TODO(jacobr): consider removing this hack once
               // we can disambiguate inspector selection from other inspect calls.
@@ -635,7 +625,7 @@ class ConsoleService extends Disposer {
       appendInstanceRef(
         value: event.inspectee,
         isolate: event.isolate,
-        inspectorRef: inspectorRef,
+        diagnostic: null,
       );
     }
   }
@@ -663,32 +653,26 @@ class IsolateDebuggerState {
 
 class IsolateManager extends Disposer {
   Map<IsolateRef, IsolateDebuggerState> _isolateStates = {};
-  IsolateRef _selectedIsolate;
   VmServiceWrapper _service;
 
   final StreamController<IsolateRef> _isolateCreatedController =
       StreamController<IsolateRef>.broadcast();
   final StreamController<IsolateRef> _isolateExitedController =
       StreamController<IsolateRef>.broadcast();
-  final StreamController<IsolateRef> _selectedIsolateController =
-      StreamController<IsolateRef>.broadcast();
 
-  var selectedIsolateAvailable = Completer<void>();
+  ValueListenable<IsolateRef> get selectedIsolate => _selectedIsolate;
+  final _selectedIsolate = ValueNotifier<IsolateRef>(null);
+  IsolateRef _pendingSelectedIsolate;
 
   int _lastIsolateIndex = 0;
   final Map<String, int> _isolateIndexMap = {};
 
-  List<LibraryRef> selectedIsolateLibraries;
+  List<LibraryRef> mainIsolateLibraries;
 
-  List<IsolateRef> get isolates =>
-      List<IsolateRef>.unmodifiable(_isolateStates.keys);
-
-  IsolateRef get selectedIsolate => _selectedIsolate;
+  ValueListenable<List<IsolateRef>> get isolates => _isolates;
+  final _isolates = ValueNotifier(const <IsolateRef>[]);
 
   Stream<IsolateRef> get onIsolateCreated => _isolateCreatedController.stream;
-
-  Stream<IsolateRef> get onSelectedIsolateChanged =>
-      _selectedIsolateController.stream;
 
   Stream<IsolateRef> get onIsolateExited => _isolateExitedController.stream;
 
@@ -719,8 +703,14 @@ class IsolateManager extends Disposer {
     _setSelectedIsolate(isolateRef);
   }
 
+  void _updateIsolatesList() {
+    _isolates.value = List<IsolateRef>.unmodifiable(_isolateStates.keys);
+  }
+
   Future<void> _initIsolates(List<IsolateRef> isolates) async {
     _isolateStates = {};
+    _updateIsolatesList();
+
     isolates.forEach(_registerIsolate);
 
     // It is critical that the _serviceExtensionManager is already listening
@@ -730,16 +720,12 @@ class IsolateManager extends Disposer {
     // service extension is included in both places as duplicate extensions are
     // handled gracefully.
     await _initSelectedIsolate(isolates);
-
-    if (_selectedIsolate != null) {
-      _isolateCreatedController.add(_selectedIsolate);
-      _selectedIsolateController.add(_selectedIsolate);
-    }
   }
 
   void _registerIsolate(IsolateRef isolateRef) {
     _isolateStates[isolateRef] = IsolateDebuggerState();
     isolateIndex(isolateRef);
+    _updateIsolatesList();
   }
 
   void _loadIsolateState(IsolateRef isolateRef) {
@@ -775,17 +761,14 @@ class IsolateManager extends Disposer {
       }
     } else if (event.kind == EventKind.kIsolateExit) {
       _isolateStates.remove(event.isolate);
+      _updateIsolatesList();
       _isolateExitedController.add(event.isolate);
       if (_mainIsolate.value == event.isolate) {
         _mainIsolate.value = null;
       }
-      if (_selectedIsolate == event.isolate) {
-        _selectedIsolate =
+      if (_selectedIsolate.value == event.isolate) {
+        _selectedIsolate.value =
             _isolateStates.isEmpty ? null : _isolateStates.keys.first;
-        if (_selectedIsolate == null) {
-          selectedIsolateAvailable = Completer();
-        }
-        _selectedIsolateController.add(_selectedIsolate);
       }
     }
   }
@@ -801,7 +784,7 @@ class IsolateManager extends Disposer {
     if (isolates.isEmpty) {
       return;
     }
-
+    _mainIsolate.value = null;
     _mainIsolate.value = await _computeMainIsolate(isolates);
     await _setSelectedIsolate(_mainIsolate.value);
   }
@@ -810,7 +793,7 @@ class IsolateManager extends Disposer {
     if (isolates.isEmpty) return null;
 
     for (IsolateRef ref in isolates) {
-      if (_selectedIsolate == null) {
+      if (_selectedIsolate.value == null) {
         final Isolate isolate = await _service.getIsolate(ref.id);
         _isolateStates[ref].onIsolateLoaded(isolate);
 
@@ -833,57 +816,53 @@ class IsolateManager extends Disposer {
   }
 
   Future<void> _setSelectedIsolate(IsolateRef ref) async {
-    if (_selectedIsolate == ref) {
+    if (_pendingSelectedIsolate == ref) {
       return;
     }
 
-    _selectedIsolate = ref;
+    _pendingSelectedIsolate = ref;
     // Store the library uris for the selected isolate.
     if (ref == null) {
-      selectedIsolateLibraries = [];
+      mainIsolateLibraries = [];
     } else {
       try {
         final Isolate isolate = await _service.getIsolate(ref.id);
-        if (_selectedIsolate == ref) {
-          selectedIsolateLibraries = isolate.libraries;
-        }
+        if (_pendingSelectedIsolate != ref) return;
+
+        mainIsolateLibraries = isolate.libraries;
       } on SentinelException {
-        if (_selectedIsolate == ref) {
-          _selectedIsolate = null;
-          final firstExistingIsolate = _isolateStates.keys.safeFirst;
-          if (firstExistingIsolate != ref) {
-            await _setSelectedIsolate(firstExistingIsolate);
-          }
+        if (_pendingSelectedIsolate != ref) return;
+
+        _selectedIsolate.value = null;
+        final firstExistingIsolate = _isolateStates.keys.safeFirst;
+        if (firstExistingIsolate != ref) {
+          await _setSelectedIsolate(firstExistingIsolate);
         }
         return;
       }
     }
 
-    if (!selectedIsolateAvailable.isCompleted) {
-      selectedIsolateAvailable.complete();
-    }
-    _selectedIsolateController.add(ref);
-  }
-
-  StreamSubscription<IsolateRef> getSelectedIsolate(
-      void onData(IsolateRef ref)) {
-    if (_selectedIsolate != null) {
-      onData(_selectedIsolate);
-    }
-    return _selectedIsolateController.stream.listen(onData);
+    if (_pendingSelectedIsolate != ref) return;
+    _selectedIsolate.value = ref;
   }
 
   void _handleVmServiceClosed() {
     cancel();
+    _pendingSelectedIsolate = null;
+    _selectedIsolate.value = null;
     _service = null;
     _lastIsolateIndex = 0;
     _setSelectedIsolate(null);
     _isolateIndexMap.clear();
     _isolateStates.clear();
+    _updateIsolatesList();
     _mainIsolate.value = null;
   }
 
   void vmServiceOpened(VmServiceWrapper service) {
+    _pendingSelectedIsolate = null;
+    _selectedIsolate.value = null;
+
     cancel();
     _service = service;
     autoDispose(service.onIsolateEvent.listen(_handleIsolateEvent));

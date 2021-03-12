@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:pedantic/pedantic.dart';
 import 'package:vm_service/vm_service.dart';
@@ -137,36 +135,33 @@ class StatusLine extends StatelessWidget {
   Widget buildIsolateSelector(BuildContext context, TextTheme textTheme) {
     final IsolateManager isolateManager = serviceManager.isolateManager;
 
-    // Listen to all isolate existence changes.
-    final Stream changeStream = combineStreams(
-      isolateManager.onSelectedIsolateChanged,
-      isolateManager.onIsolateCreated,
-      isolateManager.onIsolateExited,
-    );
+    return ValueListenableBuilder(
+      valueListenable: isolateManager.isolates,
+      builder: (context, isolates, child) {
+        return ValueListenableBuilder(
+          valueListenable: isolateManager.selectedIsolate,
+          builder: (context, isolateRef, child) {
+            final isolates = isolateManager.isolates;
 
-    return StreamBuilder<IsolateRef>(
-      initialData: isolateManager.selectedIsolate,
-      stream: changeStream.map((event) => isolateManager.selectedIsolate),
-      builder: (BuildContext context, AsyncSnapshot<IsolateRef> snapshot) {
-        final List<IsolateRef> isolates = isolateManager.isolates;
+            String isolateName(IsolateRef ref) {
+              final name = ref.name;
+              return 'Isolate $name #${isolateManager.isolateIndex(ref)}';
+            }
 
-        String isolateName(IsolateRef ref) {
-          final name = ref.name;
-          return 'Isolate $name #${isolateManager.isolateIndex(ref)}';
-        }
-
-        return DropdownButtonHideUnderline(
-          child: DropdownButton<IsolateRef>(
-            value: snapshot.data,
-            onChanged: isolateManager.selectIsolate,
-            isDense: true,
-            items: isolates.map((IsolateRef ref) {
-              return DropdownMenuItem<IsolateRef>(
-                value: ref,
-                child: Text(isolateName(ref), style: textTheme.bodyText2),
-              );
-            }).toList(),
-          ),
+            return DropdownButtonHideUnderline(
+              child: DropdownButton<IsolateRef>(
+                value: isolateRef,
+                onChanged: isolateManager.selectIsolate,
+                isDense: true,
+                items: isolates.value.map((IsolateRef ref) {
+                  return DropdownMenuItem<IsolateRef>(
+                    value: ref,
+                    child: Text(isolateName(ref), style: textTheme.bodyText2),
+                  );
+                }).toList(),
+              ),
+            );
+          },
         );
       },
     );

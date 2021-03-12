@@ -205,7 +205,7 @@ bool shouldShowScreen(Screen screen) {
   }
   if (screen.requiresLibrary != null) {
     if (!serviceManager.isServiceAvailable ||
-        !serviceManager.isolateManager.selectedIsolateAvailable.isCompleted ||
+        serviceManager.isolateManager.selectedIsolate.value == null ||
         !serviceManager.libraryUriAvailableNow(screen.requiresLibrary)) {
       return false;
     }

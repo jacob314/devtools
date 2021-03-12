@@ -24,48 +24,14 @@ import 'debugger_model.dart';
 // Make sure this a checked in with `mute: true`.
 final _log = DebugTimingLogger('debugger', mute: true);
 
-/// A line in the console.
-///
-/// TODO(jacobr): support console lines that are structured error messages as
-/// well.
-class ConsoleLine {
-  factory ConsoleLine.text(String text) => TextConsoleLine(text);
-
-  factory ConsoleLine.variable(Variable variable) =>
-      VariableConsoleLine(variable);
-
-  ConsoleLine._();
-}
-
-class TextConsoleLine extends ConsoleLine {
-  TextConsoleLine(this.text) : super._();
-  final String text;
-
-  @override
-  String toString() {
-    return text;
-  }
-}
-
-class VariableConsoleLine extends ConsoleLine {
-  VariableConsoleLine(this.variable) : super._();
-  final Variable variable;
-
-  @override
-  String toString() {
-    return variable.toString();
-  }
-}
-
 /// Responsible for managing the debug state of the app.
 class DebuggerController extends DisposableController
     with AutoDisposeControllerMixin {
-  StreamSubscription _connectionAvailabeSubscription;
   // `initialSwitchToIsolate` can be set to false for tests to skip the logic
   // in `switchToIsolate`.
   DebuggerController({this.initialSwitchToIsolate = true}) {
-    _connectionAvailabeSubscription =
-        serviceManager.onConnectionAvailable.listen(_handleConnectionAvailable);
+    autoDispose(serviceManager.onConnectionAvailable
+        .listen(_handleConnectionAvailable));
     _scriptHistoryListener = () {
       _showScriptLocation(ScriptLocation(scriptsHistory.currentScript));
     };
@@ -117,11 +83,13 @@ class DebuggerController extends DisposableController
 
   void initialize() {
     if (initialSwitchToIsolate) {
-      switchToIsolate(serviceManager.isolateManager.selectedIsolate);
+      assert(serviceManager.isolateManager.selectedIsolate.value != null);
+      switchToIsolate(serviceManager.isolateManager.selectedIsolate.value);
     }
 
-    autoDispose(serviceManager.isolateManager.onSelectedIsolateChanged
-        .listen(switchToIsolate));
+    addAutoDisposeListener(serviceManager.isolateManager.selectedIsolate, () {
+      switchToIsolate(serviceManager.isolateManager.selectedIsolate.value);
+    });
     autoDispose(_service.onDebugEvent.listen(_handleDebugEvent));
     autoDispose(_service.onIsolateEvent.listen(_handleIsolateEvent));
   }

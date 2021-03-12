@@ -103,17 +103,6 @@ class InspectorController extends DisposableController
       details = null;
     }
 
-    flutterIsolateSubscription = serviceManager.isolateManager
-        .getSelectedIsolate((IsolateRef flutterIsolate) {
-      // TODO(jacobr): listen for real isolate stopped events.
-      // Only send an isolate stopped event if there was a previous isolate or
-      // the isolate has actually changed.
-      if (_activeIsolate != null && _activeIsolate != flutterIsolate) {
-        onIsolateStopped();
-      }
-      _activeIsolate = flutterIsolate;
-    });
-
     _checkForExpandCollapseSupport();
     _checkForLayoutExplorerSupport();
 
@@ -175,7 +164,6 @@ class InspectorController extends DisposableController
   final FlutterTreeType treeType;
 
   StreamSubscription<IsolateRef> flutterIsolateSubscription;
-  IsolateRef _activeIsolate;
 
   bool _disposed = false;
 
@@ -807,7 +795,7 @@ class InspectorController extends DisposableController
             serviceManager.consoleService.appendInstanceRef(
               name: node.diagnostic.name ?? node.diagnostic.description,
               value: instanceRef,
-              inspectorRef: valueRef,
+              diagnostic: node.diagnostic,
               isolate: isolateRef,
               // TODO(jacobr): consider whether we really want to force
               // scrolling into view in this case.

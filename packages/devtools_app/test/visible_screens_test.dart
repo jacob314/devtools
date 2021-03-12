@@ -16,6 +16,7 @@ import 'package:devtools_app/src/preferences.dart';
 import 'package:devtools_app/src/screen.dart';
 import 'package:devtools_app/src/service_manager.dart';
 import 'package:devtools_app/src/performance/performance_screen.dart';
+import 'package:devtools_app/src/utils.dart';
 import 'package:devtools_app/src/vm_developer/vm_developer_tools_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -31,7 +32,7 @@ void main() {
       setGlobal(FrameworkController, FrameworkController());
       setGlobal(PreferencesController, PreferencesController());
 
-      await serviceManager.isolateManager.selectedIsolateAvailable.future;
+      await whenValueNonNull(serviceManager.isolateManager.selectedIsolate);
     });
 
     void setupMockValues({

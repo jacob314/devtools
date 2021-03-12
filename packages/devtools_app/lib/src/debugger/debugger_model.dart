@@ -12,7 +12,7 @@ import 'package:pedantic/pedantic.dart';
 import 'package:vm_service/vm_service.dart';
 
 import '../globals.dart';
-import '../inspector/inspector_service.dart';
+import '../inspector/diagnostics_node.dart';
 import '../trees.dart';
 import '../utils.dart';
 
@@ -26,12 +26,12 @@ class GenericRef {
   const GenericRef({
     @required this.isolateRef,
     this.instanceRef,
-    this.inspectorRef,
-  }) : assert(instanceRef != null || inspectorRef != null);
+    this.diagnostic,
+  });
 
   final InstanceRef instanceRef;
 
-  final InspectorInstanceRef inspectorRef;
+  final RemoteDiagnosticsNode diagnostic;
   final IsolateRef isolateRef;
 }
 
@@ -401,7 +401,7 @@ class Variable extends TreeNode<Variable> {
   factory Variable.fromRef({
     String name = '',
     @required InstanceRef value,
-    @required InspectorInstanceRef inspectorRef,
+    @required RemoteDiagnosticsNode diagnostic,
     @required IsolateRef isolateRef,
   }) {
     return Variable._(
@@ -413,21 +413,19 @@ class Variable extends TreeNode<Variable> {
         scopeEndTokenPos: -1,
       ),
       GenericRef(
-          isolateRef: isolateRef,
-          inspectorRef: inspectorRef,
-          instanceRef: value),
+          isolateRef: isolateRef, diagnostic: diagnostic, instanceRef: value),
       null,
     );
   }
 
   factory Variable.create(BoundVariable variable, IsolateRef isolateRef,
-      {InspectorInstanceRef inspectorRef}) {
+      {RemoteDiagnosticsNode diagnostic}) {
     final value = variable.value;
     return Variable._(
       variable,
       GenericRef(
         isolateRef: isolateRef,
-        inspectorRef: inspectorRef,
+        diagnostic: diagnostic,
         instanceRef: value is InstanceRef ? value : null,
       ),
       null,

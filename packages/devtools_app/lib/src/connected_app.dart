@@ -68,8 +68,17 @@ class ConnectedApp {
     }
 
     // If eval works we're not a profile build.
-    final io = EvalOnDartLibrary(['dart:io'], serviceManager.service);
-    final value = await io.eval('Platform.isAndroid', isAlive: null);
+    final mainIsolate = serviceManager.isolateManager.mainIsolate.value;
+    assert(mainIsolate != null);
+    final io = EvalOnDartLibrary(
+      ['dart:io'],
+      serviceManager.service,
+      isolateRef: mainIsolate,
+    );
+    final value = await io.eval(
+      'Platform.isAndroid',
+      isAlive: null,
+    );
     return !(value?.kind == 'Bool');
 
     // TODO(terry): Disabled below code, it will hang if flutter run --start-paused
