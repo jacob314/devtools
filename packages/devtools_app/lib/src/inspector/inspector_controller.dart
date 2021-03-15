@@ -793,7 +793,6 @@ class InspectorController extends DisposableController
               await inspectorService?.toObservatoryInstanceRef(valueRef);
           if (instanceRef != null) {
             serviceManager.consoleService.appendInstanceRef(
-              name: node.diagnostic.name ?? node.diagnostic.description,
               value: instanceRef,
               diagnostic: node.diagnostic,
               isolate: isolateRef,

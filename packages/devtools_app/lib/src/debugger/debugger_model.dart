@@ -13,6 +13,7 @@ import 'package:vm_service/vm_service.dart';
 
 import '../globals.dart';
 import '../inspector/diagnostics_node.dart';
+import '../inspector/inspector_service.dart';
 import '../trees.dart';
 import '../utils.dart';
 
@@ -212,41 +213,144 @@ Future<Obj> getObjectHelper(IsolateRef isolateRef, ObjRef objRef) {
   return serviceManager.service.getObject(isolateRef.id, objRef.id);
 }
 
+void addExpandableChildren(Variable variable, List<Variable> children,
+    {bool expandAll = false}) {
+  for (var child in children) {
+    if (expandAll) {
+      buildVariablesTree(child, expandAll: expandAll);
+    }
+    variable.addChild(child);
+  }
+}
+
 /// Builds the tree representation for a [Variable] object by querying data,
 /// creating child Variable objects, and assigning parent-child relationships.
 ///
 /// We call this method as we expand variables in the variable tree, because
 /// building the tree for all variable data at once is very expensive.
-Future<void> buildVariablesTree(Variable variable) async {
-  if (!variable.isExpandable ||
-      variable.treeInitialized ||
-      variable.boundVar.value is! InstanceRef) return;
+Future<void> buildVariablesTree(Variable variable,
+    {bool expandAll = false}) async {
+  if (!variable.isExpandable || variable.treeInitializeStarted) return;
+  variable.treeInitializeStarted = true;
 
-  final InstanceRef instanceRef = variable.boundVar.value;
-  try {
-    final dynamic result =
-        await getObjectHelper(variable.ref.isolateRef, instanceRef);
-    if (result is Instance) {
-      if (result.associations != null) {
-        variable.addAllChildren(
-            _createVariablesForAssociations(result, variable.ref.isolateRef));
-      } else if (result.elements != null) {
-        variable.addAllChildren(
-            _createVariablesForElements(result, variable.ref.isolateRef));
-      } else if (result.bytes != null) {
-        variable.addAllChildren(
-            _createVariablesForBytes(result, variable.ref.isolateRef));
-        // Check fields last, as all instanceRefs may have a non-null fields
-        // with no entries.
-      } else if (result.fields != null) {
-        variable.addAllChildren(
-            _createVariablesForFields(result, variable.ref.isolateRef));
+  final ref = variable.ref;
+  final isolateRef = ref.isolateRef;
+  var instanceRef = ref.instanceRef;
+  final diagnostic = ref.diagnostic;
+  if (diagnostic == null && instanceRef != null) {
+    if (instanceRef.classRef.name == 'DiagnosticableTreeNode') {
+      final inspectorService = serviceManager.inspectorService;
+      if (serviceManager.inspectorService != null) {
+        // XXX stop leaking.
+        final objectGroup = inspectorService.createObjectGroup('debugger');
+        try {
+          instanceRef = await objectGroup.evalOnRef('object.value', ref);
+          variable.customValue = instanceRef;
+        } catch (e) {
+          // LOG
+          print("CAUGHT $e");
+        }
       }
     }
-  } on SentinelException {
-    // Fail gracefully if calling `getObject` throws a SentinelException.
   }
-  variable.treeInitialized = true;
+  if (diagnostic != null) {
+    final ObjectGroup service = diagnostic.inspectorService;
+    if (diagnostic.inlineProperties?.isNotEmpty ?? false) {
+      // FIX DUPE CODE WITH FOLLOWING BLOCK
+      final properties = diagnostic.inlineProperties;
+      addExpandableChildren(
+        variable,
+        await _createVariablesForDiagnostics(service, properties, isolateRef,
+            includeInstanceRef: variable.ref.instanceRef != null),
+        expandAll: true,
+      );
+    } else {
+      final properties = await diagnostic.getProperties(service);
+      if (properties != null) {
+        addExpandableChildren(
+          variable,
+          await _createVariablesForDiagnostics(service, properties, isolateRef,
+              includeInstanceRef: variable.ref.instanceRef != null),
+          expandAll: true,
+        );
+      }
+    }
+  }
+  final existingNames = <String>{};
+  for (var child in variable.children) {
+    final name = child?.boundVar?.name;
+    if (name != null && name.isNotEmpty) {
+      existingNames.add(name);
+      existingNames.add('_$name'); // Hack.
+    }
+  }
+  // Sometimes we want to show both raw members as well as diagnostics and other
+  // times we only want to show diagnostics.
+  if (instanceRef != null && variable.showRawMembers) {
+    try {
+      final dynamic result =
+          await getObjectHelper(variable.ref.isolateRef, instanceRef);
+      if (result is Instance) {
+        if (result.associations != null) {
+          variable.addAllChildren(
+              _createVariablesForAssociations(result, isolateRef));
+        } else if (result.elements != null) {
+          variable
+              .addAllChildren(_createVariablesForElements(result, isolateRef));
+        } else if (result.bytes != null) {
+          variable.addAllChildren(_createVariablesForBytes(result, isolateRef));
+          // Check fields last, as all instanceRefs may have a non-null fields
+          // with no entries.
+        } else if (result.fields != null) {
+          variable.addAllChildren(_createVariablesForFields(result, isolateRef,
+              existingNames: existingNames));
+        }
+      }
+    } on SentinelException {
+      // Fail gracefully if calling `getObject` throws a SentinelException.
+    }
+  }
+  if (diagnostic != null) {
+    // Always add children last after properties to avoid confusion.
+    final ObjectGroup service = diagnostic.inspectorService;
+    final diagnosticChildren = await diagnostic.children;
+    if (diagnosticChildren != null) {
+      addExpandableChildren(
+        variable,
+        await _createVariablesForDiagnostics(
+            service, diagnosticChildren, isolateRef,
+            includeInstanceRef: variable.ref.instanceRef != null),
+        expandAll: expandAll,
+      );
+    }
+  }
+}
+
+Future<List<Variable>> _createVariablesForDiagnostics(
+  ObjectGroup inspectorService,
+  List<RemoteDiagnosticsNode> diagnostics,
+  IsolateRef isolateRef, {
+  @required bool includeInstanceRef,
+}) async {
+  final variables = <Variable>[];
+  for (var diagnostic in diagnostics) {
+    // TODO(jacobr): reduce round trips or increase parallelism.
+    // Omit hidden properties.
+    if (diagnostic.level == DiagnosticLevel.hidden) continue;
+    InstanceRef instanceRef;
+    if (includeInstanceRef) {
+      instanceRef =
+          await inspectorService.toObservatoryInstanceRef(diagnostic.valueRef);
+    } else {
+      instanceRef = null;
+    }
+    variables.add(Variable.fromRef(
+        name: diagnostic.name,
+        value: instanceRef,
+        diagnostic: diagnostic,
+        isolateRef: isolateRef));
+  }
+  return variables;
 }
 
 List<Variable> _createVariablesForAssociations(
@@ -380,23 +484,29 @@ List<Variable> _createVariablesForElements(
 }
 
 List<Variable> _createVariablesForFields(
-    Instance instance, IsolateRef isolateRef) {
-  final boundVariables = instance.fields.map((field) {
-    return BoundVariable(
-      name: field.decl.name,
+    Instance instance, IsolateRef isolateRef,
+    {Set<String> existingNames}) {
+  final boundVariables = <BoundVariable>[];
+  for (var field in instance.fields) {
+    final name = field.decl.name;
+    if (existingNames != null && existingNames.contains(name)) continue;
+    boundVariables.add(BoundVariable(
+      name: name,
       value: field.value,
       scopeStartTokenPos: null,
       scopeEndTokenPos: null,
       declarationTokenPos: null,
-    );
-  });
+    ));
+  }
   return boundVariables.map((bv) => Variable.create(bv, isolateRef)).toList();
 }
 
 // TODO(jacobr): gracefully handle cases where the isolate has closed and
 // InstanceRef objects have become sentinels.
 class Variable extends TreeNode<Variable> {
-  Variable._(this.boundVar, this.ref, this.text);
+  Variable._(this.boundVar, this.ref, this.text) {
+    indentChildren = ref?.diagnostic?.style != DiagnosticsTreeStyle.flat;
+  }
 
   factory Variable.fromRef({
     String name = '',
@@ -440,15 +550,25 @@ class Variable extends TreeNode<Variable> {
   final BoundVariable boundVar;
   final GenericRef ref;
 
-  bool treeInitialized = false;
+  bool showRawMembers = true;
+  bool treeInitializeStarted = false;
 
   @override
-  bool get isExpandable =>
-      children.isNotEmpty ||
-      (boundVar.value is InstanceRef &&
-          (boundVar.value as InstanceRef).valueAsString == null);
+  bool get isExpandable {
+    if (children.isNotEmpty) return true;
+    final diagnostic = ref.diagnostic;
+    if (diagnostic != null &&
+        ((diagnostic.inlineProperties?.isNotEmpty ?? false) ||
+            diagnostic.hasChildren)) return true;
+    final value = boundVar.value;
+    return value is InstanceRef &&
+        value.valueAsString ==
+            null; // THIS is dumb. Instead cache what classes have fields.
+  }
 
-  Object get value => boundVar.value;
+  Object get value => customValue ?? ref.instanceRef;
+  // TODO(jacobr): refactor.
+  InstanceRef customValue;
 
   // TODO(kenz): add custom display for lists with more than 100 elements
   String get displayValue {

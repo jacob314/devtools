@@ -2,9 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:devtools_app/src/debugger/debugger_controller.dart';
+import 'package:devtools_app/src/debugger/debugger_model.dart';
+import 'package:devtools_app/src/debugger/variables.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../debugger/hover.dart';
 import '../ui/icons.dart';
 import '../utils.dart';
 import 'diagnostics_node.dart';
@@ -31,11 +36,13 @@ class DiagnosticsNodeDescription extends StatelessWidget {
     this.diagnostic, {
     this.isSelected,
     this.errorText,
+    this.multiline = false,
   });
 
   final RemoteDiagnosticsNode diagnostic;
   final bool isSelected;
   final String errorText;
+  final bool multiline;
 
   Widget _paddedIcon(Widget icon) {
     return Padding(
@@ -77,18 +84,58 @@ class DiagnosticsNodeDescription extends StatelessWidget {
   Widget buildDescription(
     String description,
     TextStyle textStyle,
+    BuildContext context,
     ColorScheme colorScheme, {
     bool isProperty,
   }) {
-    return RichText(
-      overflow: TextOverflow.ellipsis,
-      text: TextSpan(
-        children: _buildDescriptionTextSpans(
-          description,
-          textStyle,
-          colorScheme,
-        ).toList(),
-      ),
+    final textSpan = TextSpan(
+      children: _buildDescriptionTextSpans(
+        description,
+        textStyle,
+        colorScheme,
+      ).toList(),
+    );
+
+    return HoverCardTip(
+      enabled: () =>
+          diagnostic != null &&
+          diagnostic.valueRef != null &&
+          diagnostic.inspectorService != null,
+      onHover: (event) async {
+        final inspectorService = await diagnostic.inspectorService;
+        final value = await inspectorService
+            .toObservatoryInstanceRef(diagnostic.valueRef);
+        final variable = Variable.fromRef(
+          value: value,
+          isolateRef: inspectorService.inspectorService.isolateRef,
+          diagnostic: diagnostic,
+        );
+        // TODO(jacobr): make this a helper.
+        await buildVariablesTree(variable);
+        for (var child in variable.children) {
+          await buildVariablesTree(child);
+        }
+        variable.expand();
+        // XXX need to make sure the over request hasn't been cancelled.
+        final DebuggerController _debuggerController =
+            Provider.of<DebuggerController>(context, listen: false);
+
+        return HoverCardData(
+          title: diagnostic.toStringShort(),
+          contents: Material(
+            child: ExpandableVariable(
+              debuggerController: _debuggerController,
+              variable: ValueNotifier(variable),
+            ),
+          ),
+        );
+      },
+      child: multiline
+          ? SelectableText.rich(textSpan)
+          : RichText(
+              overflow: TextOverflow.ellipsis,
+              text: textSpan,
+            ),
     );
   }
 
@@ -109,6 +156,7 @@ class DiagnosticsNodeDescription extends StatelessWidget {
     TextStyle textStyle = DefaultTextStyle.of(context)
         .style
         .merge(textStyleForLevel(diagnostic.level, colorScheme));
+    // TODO(jacobr): use TextSpans and SelectableText instead of Text.
     if (diagnostic.isProperty) {
       // Display of inline properties.
       final String propertyType = diagnostic.propertyType;
@@ -173,6 +221,7 @@ class DiagnosticsNodeDescription extends StatelessWidget {
         child: buildDescription(
           description,
           textStyle,
+          context,
           colorScheme,
           isProperty: true,
         ),
@@ -201,7 +250,7 @@ class DiagnosticsNodeDescription extends StatelessWidget {
             style: inspector_text_styles.unimportant(colorScheme),
           ));
           if (diagnostic.separator != ' ' &&
-              diagnostic.description.isNotEmpty) {
+              (diagnostic.description?.isNotEmpty ?? false)) {
             children.add(Text(
               ' ',
               style: inspector_text_styles.unimportant(colorScheme),
@@ -218,6 +267,7 @@ class DiagnosticsNodeDescription extends StatelessWidget {
       var diagnosticDescription = buildDescription(
         diagnostic.description,
         textStyle,
+        context,
         colorScheme,
         isProperty: false,
       );

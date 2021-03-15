@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import '../common_widgets.dart';
 import '../globals.dart';
+import '../inspector/diagnostics.dart';
 import '../inspector/inspector_screen.dart';
 import '../notifications.dart';
 import '../routing.dart';
@@ -77,8 +78,11 @@ class VariablesList extends StatelessWidget {
 }
 
 class ExpandableVariable extends StatelessWidget {
-  const ExpandableVariable({Key key, this.variable, this.debuggerController})
-      : super(key: key);
+  const ExpandableVariable({
+    Key key,
+    this.variable,
+    this.debuggerController,
+  }) : super(key: key);
 
   final ValueListenable<Variable> variable;
   final DebuggerController debuggerController;
@@ -112,6 +116,7 @@ class ExpandableVariable extends StatelessWidget {
   }
 }
 
+// TODO(jacobr): this looks like a widget.
 Widget displayProvider(
   BuildContext context,
   Variable variable,
@@ -132,6 +137,14 @@ Widget displayProvider(
         ),
       ),
       onTap: onTap,
+    );
+  }
+  final diagnostic = variable.ref.diagnostic;
+  if (diagnostic != null) {
+    return DiagnosticsNodeDescription(
+      diagnostic,
+      isSelected: false,
+      multiline: true,
     );
   }
   return Tooltip(

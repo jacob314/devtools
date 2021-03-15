@@ -1099,7 +1099,7 @@ class ObjectGroup {
     String expression,
     GenericRef ref,
   ) async {
-    final inspectorRef = ref.diagnostic.valueRef;
+    final inspectorRef = ref?.diagnostic?.valueRef;
     if (inspectorRef != null && inspectorRef.id != null) {
       return await inspectorLibrary.eval(
         "((object) => $expression)(WidgetInspectorService.instance.toObject('${inspectorRef?.id}'))",

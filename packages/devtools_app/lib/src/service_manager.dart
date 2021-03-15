@@ -85,6 +85,7 @@ class ServiceConnectionManager {
 
   InspectorService get inspectorService => _inspectorService;
   InspectorService _inspectorService;
+  Completer<InspectorService> _inspectorServiceCompleter;
 
   ErrorBadgeManager get errorBadgeManager => _errorBadgeManager;
   final _errorBadgeManager = ErrorBadgeManager();
@@ -186,6 +187,11 @@ class ServiceConnectionManager {
 
     _inspectorService?.dispose();
     _inspectorService = null;
+    if (_inspectorServiceCompleter != null &&
+        !_inspectorServiceCompleter.isCompleted) {
+      _inspectorServiceCompleter.complete(null);
+    }
+    _inspectorServiceCompleter = Completer();
 
     final serviceStreamName = await service.serviceStreamName;
 
@@ -267,6 +273,9 @@ class ServiceConnectionManager {
 
     if (connectedApp.isFlutterAppNow) {
       _inspectorService = await InspectorService.create(service);
+      _inspectorServiceCompleter.complete(_inspectorService);
+    } else {
+      _inspectorServiceCompleter.complete(null);
     }
 
     // Set up analytics dimensions for the connected app.
@@ -306,10 +315,12 @@ class ServiceConnectionManager {
 
   /// This can throw an [RPCError].
   Future<void> performHotReload() async {
-    await callService(
-      registrations.hotReload.service,
-      isolateId: isolateManager.selectedIsolate.value.id,
-    );
+    if (isolateManager.selectedIsolate.value != null) {
+      await callService(
+        registrations.hotReload.service,
+        isolateId: isolateManager.selectedIsolate.value.id,
+      );
+    }
   }
 
   /// This can throw an [RPCError].
@@ -435,6 +446,7 @@ class ConsoleLine {
         text,
         forceScrollIntoView: forceScrollIntoView,
       );
+
   factory ConsoleLine.variable(
     Variable variable, {
     bool forceScrollIntoView = false,
@@ -443,6 +455,7 @@ class ConsoleLine {
         variable,
         forceScrollIntoView: forceScrollIntoView,
       );
+
   ConsoleLine._(this.forceScrollIntoView);
 
   // Whether this console line should be scrolled into view when it is added.
@@ -462,7 +475,9 @@ class TextConsoleLine extends ConsoleLine {
 
 class VariableConsoleLine extends ConsoleLine {
   VariableConsoleLine(this.variable, {bool forceScrollIntoView = false})
-      : super._(forceScrollIntoView);
+      : super._(
+          forceScrollIntoView,
+        );
   final Variable variable;
 
   @override
@@ -480,15 +495,22 @@ class ConsoleService extends Disposer {
     @required RemoteDiagnosticsNode diagnostic,
     @required IsolateRef isolate,
     bool forceScrollIntoView = false,
+    bool expandAll = false,
   }) async {
     _stdioTrailingNewline = false;
     // TODO(jacobr): this is O(n) in the number of lines. Use a custom ValueListenable that notiifies on list appends instead.
-    final lines = _stdio.value.toList();
     final variable = Variable.fromRef(
         name: name, value: value, diagnostic: diagnostic, isolateRef: isolate);
-    unawaited(buildVariablesTree(variable));
-    lines.add(ConsoleLine.variable(variable,
-        forceScrollIntoView: forceScrollIntoView));
+    // TODO(jacobr): fix out of order issues by tracking raw order.
+    await buildVariablesTree(variable, expandAll: expandAll);
+    if (expandAll) {
+      variable.expandCascading();
+    }
+    final lines = _stdio.value.toList();
+    lines.add(ConsoleLine.variable(
+      variable,
+      forceScrollIntoView: forceScrollIntoView,
+    ));
     _stdio.value = lines;
   }
 
@@ -583,9 +605,33 @@ class ConsoleService extends Disposer {
     cancel();
     autoDispose(service.onDebugEvent.listen(_handleDebugEvent));
     // TODO(jacobr): listen with event history here.
-    autoDispose(service.onStdoutEvent.listen(_handleStdoutEvent));
+    autoDispose(service.onStdoutEventWithHistory.listen(_handleStdoutEvent));
     // TODO(jacobr): do we want to listen with event history here?
-    autoDispose(service.onStderrEvent.listen(_handleStderrEvent));
+    autoDispose(service.onStderrEventWithHistory.listen(_handleStderrEvent));
+    autoDispose(
+        service.onExtensionEventWithHistory.listen(_handleExtensionEvent));
+  }
+
+  void _handleExtensionEvent(Event e) async {
+    if (e.extensionKind == 'Flutter.Error') {
+      final inspectorService =
+          await serviceManager._inspectorServiceCompleter.future;
+      if (inspectorService == null) {
+        return;
+      }
+      // XXX events are out of order.
+      appendInstanceRef(
+        value: null,
+        diagnostic: RemoteDiagnosticsNode(
+          e.extensionData.data,
+          objectGroup,
+          false,
+          null,
+        ),
+        isolate: objectGroup.inspectorService.isolateRef,
+        expandAll: true,
+      );
+    }
   }
 
   void _handleVmServiceClosed() {

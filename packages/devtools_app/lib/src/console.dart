@@ -189,10 +189,13 @@ class _ConsoleOutputState extends State<_ConsoleOutput>
       key: _scrollBarKey,
       controller: _scroll,
       isAlwaysShown: true,
-      child: ListView.builder(
+      child: ListView.separated(
         padding: const EdgeInsets.all(denseSpacing),
         itemCount: _currentLines.length,
         controller: _scroll,
+        separatorBuilder: (context, index) {
+          return const Divider();
+        },
         itemBuilder: (context, index) {
           final line = _currentLines[index];
           if (line is TextConsoleLine) {

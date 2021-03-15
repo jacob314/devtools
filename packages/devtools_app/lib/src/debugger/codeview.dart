@@ -561,15 +561,13 @@ class Lines extends StatelessWidget {
   }
 }
 
+// XXX make stateless.
 class LineItem extends StatefulWidget {
   const LineItem({
     Key key,
     @required this.lineContents,
     this.pausedFrame,
   }) : super(key: key);
-
-  static const _hoverDelay = Duration(milliseconds: 500);
-  static const _hoverWidth = 250.0;
 
   final TextSpan lineContents;
   final StackFrameAndSourcePosition pausedFrame;
@@ -579,80 +577,61 @@ class LineItem extends StatefulWidget {
 }
 
 class _LineItemState extends State<LineItem> {
-  /// A timer that shows a [HoverCard] with an evaluation result when completed.
-  Timer _showTimer;
+  Future<HoverCardData> _onHover(PointerHoverEvent event) async {
+    final theme = Theme.of(context);
 
-  /// A timer that removes a [HoverCard] when completed.
-  Timer _removeTimer;
+    final word = wordForHover(
+      event.localPosition.dx,
+      widget.lineContents,
+      theme.fixedFontStyle,
+    );
+    if (word != '') {
+      try {
+        final DebuggerController _debuggerController =
+            Provider.of<DebuggerController>(context, listen: false);
+        final InstanceRef response =
+            await _debuggerController.evalAtCurrentFrame(word);
+        final variable = Variable.fromRef(
+          value: response,
+          isolateRef: _debuggerController.isolateRef,
+          diagnostic: null,
+        );
+        await buildVariablesTree(variable);
 
-  /// Displays the evaluation result of a source code item.
-  HoverCard _hoverCard;
-
-  DebuggerController _debuggerController;
-
-  void _onHoverExit() {
-    _showTimer?.cancel();
-    _removeTimer = Timer(LineItem._hoverDelay, () {
-      _hoverCard?.maybeRemove();
-    });
-  }
-
-  void _onHover(PointerHoverEvent event, BuildContext context) {
-    _showTimer?.cancel();
-    _removeTimer?.cancel();
-    if (!_debuggerController.isPaused.value) return;
-    _showTimer = Timer(LineItem._hoverDelay, () async {
-      final theme = Theme.of(context);
-      _hoverCard?.remove();
-      final word = wordForHover(
-        event.localPosition.dx,
-        widget.lineContents,
-        theme.fixedFontStyle,
-      );
-      if (word != '') {
-        try {
-          final InstanceRef response =
-              await _debuggerController.evalAtCurrentFrame(word);
-          final variable = Variable.fromRef(
-            value: response,
-            isolateRef: _debuggerController.isolateRef,
-            diagnostic: null,
-          );
-          await buildVariablesTree(variable);
-          _hoverCard = HoverCard(
-            contents: Material(
-              child: ExpandableVariable(
-                debuggerController: _debuggerController,
-                variable: ValueNotifier(variable),
-              ),
+        return HoverCardData(
+          title: word,
+          contents: Material(
+            child: ExpandableVariable(
+              debuggerController: _debuggerController,
+              variable: ValueNotifier(variable),
             ),
-            event: event,
-            width: LineItem._hoverWidth,
-            title: word,
-            context: context,
-          );
-        } catch (_) {
-          // Silently fail and don't display a HoverCard.
-        }
+          ),
+        );
+      } catch (_) {
+        // Silently fail and don't display a HoverCard.
       }
-    });
-  }
-
-  @override
-  void dispose() {
-    _showTimer?.cancel();
-    _removeTimer?.cancel();
-    _hoverCard?.remove();
-    super.dispose();
+    }
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final darkTheme = theme.brightness == Brightness.dark;
-    _debuggerController = Provider.of<DebuggerController>(context);
+    final darkTheme = theme.isDarkTheme;
 
     Widget child;
+    final line = HoverCardTip(
+      enabled: () => Provider.of<DebuggerController>(context, listen: false)
+          .isPaused
+          .value,
+      onHover: _onHover,
+      child: SelectableText.rich(
+        widget.lineContents,
+        scrollPhysics: const NeverScrollableScrollPhysics(),
+        maxLines: 1,
+      ),
+    );
+
     if (widget.pausedFrame != null) {
       final column = widget.pausedFrame.column;
 
@@ -699,11 +678,11 @@ class _LineItemState extends State<LineItem> {
               )
             ],
           ),
-          _hoverableLine(),
+          line,
         ],
       );
     } else {
-      child = _hoverableLine();
+      child = line;
     }
 
     final backgroundColor = widget.pausedFrame != null
@@ -719,16 +698,6 @@ class _LineItemState extends State<LineItem> {
       child: child,
     );
   }
-
-  Widget _hoverableLine() => MouseRegion(
-        onExit: (_) => _onHoverExit(),
-        onHover: (e) => _onHover(e, context),
-        child: SelectableText.rich(
-          widget.lineContents,
-          scrollPhysics: const NeverScrollableScrollPhysics(),
-          maxLines: 1,
-        ),
-      );
 }
 
 class ActiveCodeView extends StatelessWidget {

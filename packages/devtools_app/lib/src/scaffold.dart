@@ -5,8 +5,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:devtools_app/src/console.dart';
-import 'package:devtools_app/src/split.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -27,6 +25,7 @@ import 'globals.dart';
 import 'notifications.dart';
 import 'routing.dart';
 import 'screen.dart';
+import 'split.dart';
 import 'status_line.dart';
 import 'theme.dart';
 
@@ -367,7 +366,9 @@ class DevToolsScaffoldState extends State<DevToolsScaffold>
               color: theme.primaryColor,
               child: Scaffold(
                 appBar: widget.embed ? null : _buildAppBar(title),
-                body: (serviceManager.hasConnection && !offlineMode)
+                body: (serviceManager.hasConnection &&
+                        !offlineMode &&
+                        _currentScreen.showConsole)
                     ? Split(
                         axis: Axis.vertical,
                         children: [
